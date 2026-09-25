@@ -72,4 +72,111 @@ import Testing
         #expect(task.requestHeader("Content-Type") == "application/json")
         #expect(task.requestHeaders.keys.filter { $0.lowercased() == "content-type" }.count == 1)
     }
+
+    // MARK: Streaming
+
+    @Test func serverStreamResponseIsLoggedAsJSONArray() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+
+        let words = try await withEchoClient(interceptors: [interceptor]) { client in
+            try await client.expand(.with { $0.text = "a b c" }) { response in
+                var words: [String] = []
+                for try await message in response.messages {
+                    words.append(message.text)
+                }
+                return words
+            }
+        }
+
+        #expect(words == ["a", "b", "c"])
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.url == "grpcs://example.com/echo.Echo/Expand")
+        #expect(task.state == .success)
+        #expect(task.responseBody == #"[{"text":"a"},{"text":"b"},{"text":"c"}]"#)
+    }
+
+    @Test func clientStreamRequestIsLoggedAsJSONArray() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+
+        let reply = try await withEchoClient(interceptors: [interceptor]) { client in
+            try await client.collect { writer in
+                try await writer.write(.with { $0.text = "a" })
+                try await writer.write(contentsOf: [.with { $0.text = "b" }, .with { $0.text = "c" }])
+            }
+        }
+
+        #expect(reply.text == "a b c")
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.state == .success)
+        #expect(task.requestBody == #"[{"text":"a"},{"text":"b"},{"text":"c"}]"#)
+        #expect(task.responseBody == #"{"text":"a b c"}"#)
+    }
+
+    @Test func bidirectionalStreamIsLoggedWithBothBodies() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+
+        let count = try await withEchoClient(interceptors: [interceptor]) { client in
+            try await client.update { writer in
+                try await writer.write(.with { $0.text = "x" })
+                try await writer.write(.with { $0.text = "y" })
+            } onResponse: { response in
+                var count = 0
+                for try await _ in response.messages {
+                    count += 1
+                }
+                return count
+            }
+        }
+
+        #expect(count == 2)
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.state == .success)
+        #expect(task.requestBody == #"[{"text":"x"},{"text":"y"}]"#)
+        #expect(task.responseBody == #"[{"text":"x"},{"text":"y"}]"#)
+    }
+
+    /// Review focus 2.
+    @Test func serverStreamFailingMidwayKeepsReceivedMessages() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+        let service = EchoService(failure: RPCError(code: .dataLoss, message: "stream broke"))
+
+        await #expect(throws: RPCError.self) {
+            try await withEchoClient(service: service, interceptors: [interceptor]) { client in
+                try await client.expand(.with { $0.text = "a b" }) { response in
+                    for try await _ in response.messages {}
+                }
+            }
+        }
+
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.state == .failure)
+        #expect(task.errorCode == 15)
+        #expect(task.responseHeader("grpc-status") == "15")
+        #expect(task.responseHeader("grpc-message") == "stream broke")
+        #expect(task.responseBody == #"[{"text":"a"},{"text":"b"}]"#)
+    }
+
+    /// Review focus 1.
+    @Test func concurrentCallsAreLoggedAsSeparateTasks() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+
+        try await withEchoClient(interceptors: [interceptor]) { client in
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                for index in 0..<10 {
+                    group.addTask { _ = try await client.get(.with { $0.text = "call-\(index)" }) }
+                }
+                try await group.waitForAll()
+            }
+        }
+
+        let tasks = try snapshots(in: store)
+        #expect(tasks.count == 10)
+        #expect(tasks.allSatisfy { $0.state == .success && $0.requestBody == $0.responseBody })
+        #expect(Set(tasks.compactMap(\.requestBody)).count == 10)
+    }
 }
