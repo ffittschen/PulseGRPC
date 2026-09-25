@@ -37,7 +37,8 @@ let package = Package(
                 .product(name: "GRPCInProcessTransport", package: "grpc-swift-2"),
                 .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-            ]
+            ],
+            exclude: ["Fixtures/echo.proto"]
         ),
     ]
 )
