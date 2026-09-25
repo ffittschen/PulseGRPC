@@ -20,7 +20,7 @@ struct RecordingBodyParts<Output: Sendable>: AsyncSequence, Sendable {
         mutating func next() async throws -> Element? {
             do {
                 guard let part = try await base.next() else {
-                    recorder.finish(.endOfStream)
+                    recorder.finish(.endOfStream(isCancelled: Task.isCancelled))
                     return nil
                 }
                 switch part {
@@ -31,7 +31,7 @@ struct RecordingBodyParts<Output: Sendable>: AsyncSequence, Sendable {
                 }
                 return part
             } catch {
-                recorder.finish(.failed(GRPCTaskMapping.rpcError(from: error)))
+                recorder.finish(.failed(GRPCTaskMapping.rpcError(from: error), isCancelled: Task.isCancelled))
                 throw error
             }
         }

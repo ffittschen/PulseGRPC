@@ -75,6 +75,23 @@ import Testing
         #expect(error.localizedDescription == "NOT_FOUND (5): user not found")
     }
 
+    @Test(arguments: [
+        ("50m", Duration.milliseconds(50)),
+        ("2S", .seconds(2)),
+        ("1M", .seconds(60)),
+        ("1H", .seconds(3600)),
+        ("7u", .microseconds(7)),
+        ("9n", .nanoseconds(9)),
+    ])
+    func parsesGRPCTimeout(value: String, expected: Duration) {
+        #expect(GRPCTaskMapping.timeout(fromHeaderValue: value) == expected)
+    }
+
+    @Test(arguments: ["", "m", "12", "12x"])
+    func rejectsInvalidGRPCTimeout(value: String) {
+        #expect(GRPCTaskMapping.timeout(fromHeaderValue: value) == nil)
+    }
+
     @Test func cancellationMapsToCancelled() {
         #expect(GRPCTaskMapping.rpcError(from: CancellationError()).code == .cancelled)
     }

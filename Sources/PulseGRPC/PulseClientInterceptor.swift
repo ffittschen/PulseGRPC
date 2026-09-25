@@ -50,6 +50,7 @@ public struct PulseClientInterceptor: ClientInterceptor {
     ) async throws -> StreamingClientResponse<Output> {
         let recorder = RPCRecorder(
             request: GRPCTaskMapping.makeRequest(baseURL: baseURL, context: context, metadata: request.metadata),
+            requestMetadata: request.metadata,
             logger: logger ?? .shared,
             label: label,
             jsonEncodingOptions: jsonEncodingOptions
@@ -66,7 +67,7 @@ public struct PulseClientInterceptor: ClientInterceptor {
         do {
             response = try await next(request, context)
         } catch {
-            recorder.finish(.threw(error))
+            recorder.finish(.threw(error, isCancelled: Task.isCancelled))
             throw error
         }
 
@@ -76,7 +77,7 @@ public struct PulseClientInterceptor: ClientInterceptor {
             contents.bodyParts = RPCAsyncSequence(wrapping: RecordingBodyParts(base: contents.bodyParts, recorder: recorder))
             return StreamingClientResponse(accepted: .success(contents))
         case .failure(let error):
-            recorder.finish(.failed(error))
+            recorder.finish(.failed(error, isCancelled: Task.isCancelled))
             return response
         }
     }

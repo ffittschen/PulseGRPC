@@ -122,6 +122,22 @@ enum GRPCTaskMapping {
         return literal
     }
 
+    // MARK: Timeouts
+
+    /// Parses a `grpc-timeout` value such as `50m` (50 ms) or `2S` (2 seconds).
+    static func timeout(fromHeaderValue value: String) -> Duration? {
+        guard let unit = value.last, let amount = Int64(value.dropLast()) else { return nil }
+        switch unit {
+        case "H": return .seconds(amount * 3600)
+        case "M": return .seconds(amount * 60)
+        case "S": return .seconds(amount)
+        case "m": return .milliseconds(amount)
+        case "u": return .microseconds(amount)
+        case "n": return .nanoseconds(amount)
+        default: return nil
+        }
+    }
+
     // MARK: Status & Errors
 
     /// The canonical gRPC status name, e.g. `NOT_FOUND` for `5`.

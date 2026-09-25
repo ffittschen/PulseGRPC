@@ -179,4 +179,90 @@ import Testing
         #expect(tasks.allSatisfy { $0.state == .success && $0.requestBody == $0.responseBody })
         #expect(Set(tasks.compactMap(\.requestBody)).count == 10)
     }
+
+    // MARK: Lifecycle
+
+    @Test func taskIsPendingUntilServerResponds() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+        let gate = Gate()
+
+        try await withEchoClient(service: EchoService(gate: gate), interceptors: [interceptor]) { client in
+            async let reply = client.get(.with { $0.text = "hi" })
+            try await eventually { try snapshots(in: store).first?.state == .pending }
+            await gate.open()
+            _ = try await reply
+        }
+
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.state == .success)
+    }
+
+    @Test func abandonedStreamIsLoggedAsCancelled() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+
+        let first = try await withEchoClient(interceptors: [interceptor]) { client in
+            try await client.expand(.with { $0.text = "a b c" }) { response -> String? in
+                for try await message in response.messages {
+                    return message.text
+                }
+                return nil
+            }
+        }
+
+        #expect(first == "a")
+        try await eventually { try snapshots(in: store).first?.state == .failure }
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.errorDomain == "gRPC")
+        #expect(task.errorCode == 1)
+    }
+
+    /// Review focus 3.
+    @Test func cancelledStreamIsLoggedAsCancelled() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+        let gate = Gate()
+
+        try await withEchoClient(service: EchoService(gate: gate), interceptors: [interceptor]) { client in
+            let call = Task {
+                try await client.expand(.with { $0.text = "a b" }) { response in
+                    for try await _ in response.messages {}
+                }
+            }
+            try await eventually { try snapshots(in: store).first?.state == .pending }
+            call.cancel()
+            _ = await call.result
+            await gate.open() // Lets the server handler finish so the server can shut down.
+        }
+
+        try await eventually { try snapshots(in: store).first?.state == .failure }
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.errorDomain == "gRPC")
+        #expect(task.errorCode == 1)
+        #expect(task.responseBody == #"{"text":"a"}"#)
+    }
+
+    /// Review focus 4.
+    @Test func deadlineExceededIsLoggedAsFailure() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+        let gate = Gate()
+
+        try await withEchoClient(service: EchoService(gate: gate), interceptors: [interceptor]) { client in
+            var options = CallOptions.defaults
+            options.timeout = .milliseconds(50)
+            await #expect(throws: RPCError.self) {
+                try await client.get(.with { $0.text = "slow" }, options: options)
+            }
+            await gate.open()
+        }
+
+        try await eventually { try snapshots(in: store).first?.state == .failure }
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.errorDomain == "gRPC")
+        #expect(task.errorCode == 4)
+        #expect(task.responseHeader("grpc-status") == "4")
+        #expect(task.requestHeader("grpc-timeout") != nil)
+    }
 }

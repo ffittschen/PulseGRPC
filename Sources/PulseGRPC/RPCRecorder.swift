@@ -7,12 +7,13 @@ import Synchronization
 /// Collects everything about one RPC attempt and logs it to Pulse exactly once.
 final class RPCRecorder: Sendable {
     enum Outcome: Sendable {
-        /// The response stream ended normally.
-        case endOfStream
+        /// The response stream ended. This is only a success if trailers arrived:
+        /// grpc-swift also ends the stream quietly when the calling task is cancelled.
+        case endOfStream(isCancelled: Bool)
         /// The RPC ended with an error. The error's metadata are the trailers.
-        case failed(RPCError)
+        case failed(RPCError, isCancelled: Bool)
         /// `next` threw before a response existed.
-        case threw(any Error)
+        case threw(any Error, isCancelled: Bool)
     }
 
     private struct State: Sendable {
@@ -25,6 +26,8 @@ final class RPCRecorder: Sendable {
 
     let taskId = UUID()
     private let startDate = Date()
+    private let startInstant = ContinuousClock.now
+    private let timeout: Duration?
     private let request: URLRequest
     private let logger: NetworkLogger
     private let label: String?
@@ -33,14 +36,24 @@ final class RPCRecorder: Sendable {
 
     init(
         request: URLRequest,
+        requestMetadata: Metadata,
         logger: NetworkLogger,
         label: String?,
         jsonEncodingOptions: JSONEncodingOptions
     ) {
         self.request = request
+        self.timeout = Array(requestMetadata[stringValues: "grpc-timeout"]).first
+            .flatMap(GRPCTaskMapping.timeout(fromHeaderValue:))
         self.logger = logger
         self.label = label
         self.jsonEncodingOptions = jsonEncodingOptions
+    }
+
+    deinit {
+        // Safety net: the app stopped reading the response before it ended.
+        if let state = takeUnfinishedState() {
+            log(state, withResponse: true, rpcError: RPCError(code: .cancelled, message: "Response stream not fully consumed."))
+        }
     }
 
     // MARK: Recording
@@ -75,12 +88,15 @@ final class RPCRecorder: Sendable {
     func finish(_ outcome: Outcome) {
         guard let state = takeUnfinishedState() else { return }
         switch outcome {
-        case .endOfStream:
-            log(state, withResponse: true, rpcError: nil)
-        case .failed(let error):
-            log(state, withResponse: true, rpcError: error)
-        case .threw(let error):
-            if error is RPCError || error is any RPCErrorConvertible {
+        case .endOfStream(let isCancelled):
+            let isComplete = state.trailingMetadata != nil && !isCancelled
+            log(state, withResponse: true, rpcError: isComplete ? nil : cancellationError())
+        case .failed(let error, let isCancelled):
+            log(state, withResponse: true, rpcError: isCancelled ? cancellationError() : error)
+        case .threw(let error, let isCancelled):
+            if isCancelled {
+                log(state, withResponse: false, rpcError: cancellationError())
+            } else if error is RPCError || error is any RPCErrorConvertible {
                 log(state, withResponse: false, rpcError: GRPCTaskMapping.rpcError(from: error))
             } else {
                 log(state, response: nil, error: error)
@@ -96,6 +112,17 @@ final class RPCRecorder: Sendable {
             state.isFinished = true
             return state
         }
+    }
+
+    /// `DEADLINE_EXCEEDED` if the request's `grpc-timeout` has run out, `CANCELLED` otherwise.
+    ///
+    /// grpc-swift computes `grpc-timeout` just before the interceptors run, so the
+    /// recorder's clock starts slightly later. The tolerance absorbs that gap.
+    private func cancellationError() -> RPCError {
+        if let timeout, ContinuousClock.now - startInstant + .milliseconds(20) >= timeout {
+            return RPCError(code: .deadlineExceeded, message: "RPC timed out before completing")
+        }
+        return RPCError(code: .cancelled, message: "The RPC was cancelled.")
     }
 
     private func log(_ state: State, withResponse: Bool, rpcError: RPCError?) {
