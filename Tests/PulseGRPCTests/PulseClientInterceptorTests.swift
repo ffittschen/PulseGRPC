@@ -243,14 +243,18 @@ import Testing
         let store = try makeStore()
         let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
         let gate = Gate()
+        let firstMessageReceived = Gate()
 
         try await withEchoClient(service: EchoService(gate: gate), interceptors: [interceptor]) { client in
             let call = Task {
                 try await client.expand(.with { $0.text = "a b" }) { response in
-                    for try await _ in response.messages {}
+                    for try await _ in response.messages {
+                        await firstMessageReceived.open()
+                    }
                 }
             }
-            try await eventually { try snapshots(in: store).first?.state == .pending }
+            // The server now waits at `gate` after sending "a".
+            await firstMessageReceived.wait()
             call.cancel()
             _ = await call.result
             await gate.open() // Lets the server handler finish so the server can shut down.
