@@ -265,4 +265,32 @@ import Testing
         #expect(task.responseHeader("grpc-status") == "4")
         #expect(task.requestHeader("grpc-timeout") != nil)
     }
+
+    // MARK: Logger configuration
+
+    @Test func sensitiveHeadersAreRedacted() async throws {
+        let store = try makeStore()
+        let logger = NetworkLogger(store: store) { $0.sensitiveHeaders = ["authorization"] }
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: logger)
+
+        _ = try await withEchoClient(interceptors: [interceptor]) { client in
+            try await client.get(.with { $0.text = "hi" }, metadata: ["authorization": "Bearer secret"])
+        }
+
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.requestHeader("authorization") == "<private>")
+    }
+
+    @Test func nilLabelFallsBackToLoggerLabel() async throws {
+        let store = try makeStore()
+        let logger = NetworkLogger(store: store) { $0.label = "custom" }
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: logger, label: nil)
+
+        _ = try await withEchoClient(interceptors: [interceptor]) { client in
+            try await client.get(.with { $0.text = "hi" })
+        }
+
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.label == "custom")
+    }
 }
