@@ -68,10 +68,10 @@ enum GRPCTaskMapping {
     // MARK: Headers
 
     /// Converts metadata to headers. Repeated keys are joined with `", "`,
-    /// binary values are base64-encoded.
+    /// binary values are base64-encoded, and HTTP/2 pseudo-headers (`:status`) are dropped.
     static func headers(from metadata: Metadata) -> [String: String] {
         var headers: [String: String] = [:]
-        for (key, value) in metadata {
+        for (key, value) in metadata where !key.hasPrefix(":") {
             let string: String = switch value {
             case .string(let string): string
             case .binary(let bytes): Data(bytes).base64EncodedString()

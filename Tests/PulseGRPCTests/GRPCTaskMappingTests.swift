@@ -49,6 +49,12 @@ import Testing
         #expect(headers["x-token-bin"] == "AQI=")
     }
 
+    /// The HTTP/2 transport passes pseudo-headers such as `:status` through as metadata.
+    @Test func headersDropHTTP2PseudoHeaders() {
+        let metadata: Metadata = [":status": "200", "x-id": "1"]
+        #expect(GRPCTaskMapping.headers(from: metadata) == ["x-id": "1"])
+    }
+
     @Test func encodesProtobufMessagesAsJSON() {
         let json = GRPCTaskMapping.encode(Google_Protobuf_StringValue("hello"), options: .init())
         #expect(json == "\"hello\"")
