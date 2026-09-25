@@ -83,8 +83,18 @@ func withEchoClient<Result: Sendable>(
     interceptors: [any ClientInterceptor],
     _ body: @Sendable (Echo_Echo.Client<InProcessTransport.Client>) async throws -> Result
 ) async throws -> Result {
+    try await withEchoClient(services: [service], interceptors: interceptors, body)
+}
+
+/// Runs `body` with an Echo client against a server hosting `services`. With no
+/// services, the server rejects every call as `UNIMPLEMENTED` before reading it.
+func withEchoClient<Result: Sendable>(
+    services: [any RegistrableRPCService],
+    interceptors: [any ClientInterceptor],
+    _ body: @Sendable (Echo_Echo.Client<InProcessTransport.Client>) async throws -> Result
+) async throws -> Result {
     let inProcess = InProcessTransport()
-    return try await withGRPCServer(transport: inProcess.server, services: [service]) { _ in
+    return try await withGRPCServer(transport: inProcess.server, services: services) { _ in
         try await withGRPCClient(transport: inProcess.client, interceptors: interceptors) { client in
             try await body(Echo_Echo.Client(wrapping: client))
         }

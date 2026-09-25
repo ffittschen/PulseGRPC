@@ -21,7 +21,23 @@ final class RPCRecorder: Sendable {
         var responseMessages: [String] = []
         var initialMetadata: Metadata = [:]
         var trailingMetadata: Metadata?
+        var isRequestFinished = false
+        /// An outcome waiting for the request side to finish, see `finishAfterRequest(_:)`.
+        var pendingCompletion: Completion?
         var isFinished = false
+    }
+
+    /// What gets logged, fixed when the outcome is known.
+    private struct Completion: Sendable {
+        enum Result: Sendable {
+            /// A gRPC status; `nil` means OK.
+            case rpc(RPCError?, withResponse: Bool)
+            /// A non-gRPC error thrown by `next`, logged unchanged.
+            case other(any Error)
+        }
+
+        var result: Result
+        var endDate: Date
     }
 
     let taskId = UUID()
@@ -50,9 +66,13 @@ final class RPCRecorder: Sendable {
     }
 
     deinit {
-        // Safety net: the app stopped reading the response before it ended.
+        // Safety net: the app stopped reading the response before it ended, or a
+        // pending outcome never saw the request side finish.
         if let state = takeUnfinishedState() {
-            log(state, withResponse: true, rpcError: RPCError(code: .cancelled, message: "Response stream not fully consumed."))
+            log(state, state.pendingCompletion ?? Completion(
+                result: .rpc(RPCError(code: .cancelled, message: "Response stream not fully consumed."), withResponse: true),
+                endDate: Date()
+            ))
         }
     }
 
@@ -84,27 +104,70 @@ final class RPCRecorder: Sendable {
         state.withLock { $0.trailingMetadata = metadata }
     }
 
-    /// Logs the completed task. Only the first call has an effect.
+    /// Logs the completed task. Only the first call to `finish(_:)` or
+    /// `finishAfterRequest(_:)` has an effect.
     func finish(_ outcome: Outcome) {
-        guard let state = takeUnfinishedState() else { return }
-        switch outcome {
-        case .endOfStream(let isCancelled):
-            let isComplete = state.trailingMetadata != nil && !isCancelled
-            log(state, withResponse: true, rpcError: isComplete ? nil : cancellationError())
-        case .failed(let error, let isCancelled):
-            log(state, withResponse: true, rpcError: isCancelled ? cancellationError() : error)
-        case .threw(let error, let isCancelled):
-            if isCancelled {
-                log(state, withResponse: false, rpcError: cancellationError())
-            } else if error is RPCError || error is any RPCErrorConvertible {
-                log(state, withResponse: false, rpcError: GRPCTaskMapping.rpcError(from: error))
-            } else {
-                log(state, response: nil, error: error)
-            }
+        complete(outcome, waitsForRequest: false)
+    }
+
+    /// Like `finish(_:)`, but logs only once the request side is done.
+    ///
+    /// A server that rejects a call before reading it replies trailers-only, often
+    /// before the request message has been written. The outcome and end date are
+    /// fixed now; waiting only keeps the request body.
+    func finishAfterRequest(_ outcome: Outcome) {
+        complete(outcome, waitsForRequest: true)
+    }
+
+    /// Called when the request producer returns or throws.
+    func requestDidFinish() {
+        let finished: (State, Completion)? = state.withLock { state in
+            state.isRequestFinished = true
+            guard !state.isFinished, let completion = state.pendingCompletion else { return nil }
+            state.isFinished = true
+            return (state, completion)
+        }
+        if let finished {
+            log(finished.0, finished.1)
         }
     }
 
     // MARK: Private
+
+    private func complete(_ outcome: Outcome, waitsForRequest: Bool) {
+        let endDate = Date()
+        let finished: (State, Completion)? = state.withLock { state in
+            guard !state.isFinished, state.pendingCompletion == nil else { return nil }
+            let completion = Completion(result: result(for: outcome, trailingMetadata: state.trailingMetadata), endDate: endDate)
+            guard !waitsForRequest || state.isRequestFinished else {
+                state.pendingCompletion = completion
+                return nil
+            }
+            state.isFinished = true
+            return (state, completion)
+        }
+        if let finished {
+            log(finished.0, finished.1)
+        }
+    }
+
+    private func result(for outcome: Outcome, trailingMetadata: Metadata?) -> Completion.Result {
+        switch outcome {
+        case .endOfStream(let isCancelled):
+            let isComplete = trailingMetadata != nil && !isCancelled
+            return .rpc(isComplete ? nil : cancellationError(), withResponse: true)
+        case .failed(let error, let isCancelled):
+            return .rpc(isCancelled ? cancellationError() : error, withResponse: true)
+        case .threw(let error, let isCancelled):
+            if isCancelled {
+                return .rpc(cancellationError(), withResponse: false)
+            }
+            if error is RPCError || error is any RPCErrorConvertible {
+                return .rpc(GRPCTaskMapping.rpcError(from: error), withResponse: false)
+            }
+            return .other(error)
+        }
+    }
 
     private func takeUnfinishedState() -> State? {
         state.withLock { state in
@@ -125,15 +188,21 @@ final class RPCRecorder: Sendable {
         return RPCError(code: .cancelled, message: "The RPC was cancelled.")
     }
 
-    private func log(_ state: State, withResponse: Bool, rpcError: RPCError?) {
-        log(
-            state,
-            response: withResponse ? makeResponse(state, rpcError: rpcError) : nil,
-            error: rpcError.map(GRPCTaskMapping.error(for:))
-        )
+    private func log(_ state: State, _ completion: Completion) {
+        switch completion.result {
+        case .rpc(let rpcError, let withResponse):
+            log(
+                state,
+                response: withResponse ? makeResponse(state, rpcError: rpcError) : nil,
+                error: rpcError.map(GRPCTaskMapping.error(for:)),
+                endDate: completion.endDate
+            )
+        case .other(let error):
+            log(state, response: nil, error: error, endDate: completion.endDate)
+        }
     }
 
-    private func log(_ state: State, response: HTTPURLResponse?, error: (any Error)?) {
+    private func log(_ state: State, response: HTTPURLResponse?, error: (any Error)?, endDate: Date) {
         logger.logTaskCompleted(
             taskId: taskId,
             request: request,
@@ -142,7 +211,7 @@ final class RPCRecorder: Sendable {
             requestBody: GRPCTaskMapping.body(fromJSONMessages: state.requestMessages),
             responseBody: GRPCTaskMapping.body(fromJSONMessages: state.responseMessages),
             metrics: NetworkLogger.Metrics(
-                taskInterval: DateInterval(start: startDate, end: max(Date(), startDate)),
+                taskInterval: DateInterval(start: startDate, end: max(endDate, startDate)),
                 redirectCount: 0,
                 transactions: []
             ),

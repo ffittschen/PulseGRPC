@@ -54,6 +54,26 @@ import Testing
         #expect(task.responseBody == nil)
     }
 
+    /// A server that rejects a call before reading it replies trailers-only, which
+    /// often reaches the client before the request message has been written.
+    @Test func rejectedCallKeepsRequestBody() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+
+        try await withEchoClient(services: [], interceptors: [interceptor]) { client in
+            for index in 0..<10 {
+                await #expect(throws: RPCError.self) {
+                    try await client.get(.with { $0.text = "call-\(index)" })
+                }
+            }
+        }
+
+        try await eventually { try snapshots(in: store).filter { $0.state == .failure }.count == 10 }
+        let tasks = try snapshots(in: store)
+        #expect(tasks.allSatisfy { $0.errorCode == 12 })
+        #expect(Set(tasks.compactMap(\.requestBody)).count == 10)
+    }
+
     /// Review focus 5.
     @Test func requestMetadataIsStoredAsHeaders() async throws {
         let store = try makeStore()

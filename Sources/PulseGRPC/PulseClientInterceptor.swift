@@ -60,6 +60,7 @@ public struct PulseClientInterceptor: ClientInterceptor {
         var request = request
         let producer = request.producer
         request.producer = { writer in
+            defer { recorder.requestDidFinish() }
             try await producer(RPCWriter(wrapping: RecordingWriter(base: writer, recorder: recorder)))
         }
 
@@ -77,7 +78,7 @@ public struct PulseClientInterceptor: ClientInterceptor {
             contents.bodyParts = RPCAsyncSequence(wrapping: RecordingBodyParts(base: contents.bodyParts, recorder: recorder))
             return StreamingClientResponse(accepted: .success(contents))
         case .failure(let error):
-            recorder.finish(.failed(error, isCancelled: Task.isCancelled))
+            recorder.finishAfterRequest(.failed(error, isCancelled: Task.isCancelled))
             return response
         }
     }
