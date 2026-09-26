@@ -55,6 +55,16 @@ import Testing
         #expect(GRPCTaskMapping.headers(from: metadata) == ["x-id": "1"])
     }
 
+    @Test func headersGroupKeysCaseInsensitively() {
+        var metadata: Metadata = ["X-Id": "1"]
+        metadata.addString("2", forKey: "x-id")
+        #expect(GRPCTaskMapping.headers(from: metadata) == ["X-Id": "1, 2"])
+    }
+
+    @Test func mergingJoinsKeysCaseInsensitively() {
+        #expect(GRPCTaskMapping.merging(["X-Id": "1"], ["x-id": "2", "y": "3"]) == ["X-Id": "1, 2", "y": "3"])
+    }
+
     @Test func encodesProtobufMessagesAsJSON() {
         let json = GRPCTaskMapping.encode(Google_Protobuf_StringValue("hello"), options: .init())
         #expect(json == "\"hello\"")

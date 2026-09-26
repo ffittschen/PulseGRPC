@@ -92,6 +92,20 @@ import Testing
         #expect(task.requestHeaders.keys.filter { $0.lowercased() == "content-type" }.count == 1)
     }
 
+    @Test func requestMetadataKeysDifferingInCaseKeepAllValues() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+        var metadata: Metadata = ["X-Id": "1"]
+        metadata.addString("2", forKey: "x-id")
+
+        _ = try await withEchoClient(interceptors: [interceptor]) { [metadata] client in
+            try await client.get(.with { $0.text = "hi" }, metadata: metadata)
+        }
+
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.requestHeader("x-id") == "1, 2")
+    }
+
     // MARK: Streaming
 
     @Test func serverStreamResponseIsLoggedAsJSONArray() async throws {

@@ -69,16 +69,21 @@ enum GRPCTaskMapping {
 
     /// Converts metadata to headers. Repeated keys are joined with `", "`,
     /// binary values are base64-encoded, and HTTP/2 pseudo-headers (`:status`) are dropped.
+    ///
+    /// Keys are grouped case-insensitively, keeping the first spelling: metadata lookups
+    /// and `URLRequest`/`HTTPURLResponse` treat `X-Id` and `x-id` as the same header.
     static func headers(from metadata: Metadata) -> [String: String] {
         var headers: [String: String] = [:]
+        var spellings: [String: String] = [:] // lowercased key → first spelling
         for (key, value) in metadata where !key.hasPrefix(":") {
             let string: String = switch value {
             case .string(let string): string
             case .binary(let bytes): Data(bytes).base64EncodedString()
             }
-            if let existing = headers[key] {
-                headers[key] = existing + ", " + string
+            if let spelling = spellings[key.lowercased()] {
+                headers[spelling, default: ""] += ", " + string
             } else {
+                spellings[key.lowercased()] = key
                 headers[key] = string
             }
         }
@@ -86,8 +91,19 @@ enum GRPCTaskMapping {
     }
 
     /// Merges two header dictionaries, joining the values of clashing keys with `", "`.
+    /// Keys clash case-insensitively; the spelling in `lhs` wins.
     static func merging(_ lhs: [String: String], _ rhs: [String: String]) -> [String: String] {
-        lhs.merging(rhs) { "\($0), \($1)" }
+        var headers = lhs
+        var spellings = Dictionary(lhs.keys.map { ($0.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
+        for (key, value) in rhs {
+            if let spelling = spellings[key.lowercased()] {
+                headers[spelling, default: ""] += ", " + value
+            } else {
+                spellings[key.lowercased()] = key
+                headers[key] = value
+            }
+        }
+        return headers
     }
 
     static func removingContentType(from headers: [String: String]) -> [String: String] {
