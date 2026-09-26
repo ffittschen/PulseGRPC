@@ -127,4 +127,37 @@ import Testing
         #expect(transaction.remoteAddress == "127.0.0.1")
         #expect(transaction.networkProtocol == "h2")
     }
+
+    /// A failed call maps the same way over the real HTTP/2 transport as it does in-process.
+    @Test func http2TransportMapsFailedCallStatus() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: URL(string: "http://127.0.0.1"), logger: NetworkLogger(store: store))
+        let service = EchoService(failure: RPCError(code: .notFound, message: "No echo named 'ghost'"))
+        let serverTransport = HTTP2ServerTransport.Posix(
+            address: .ipv4(host: "127.0.0.1", port: 0),
+            transportSecurity: .plaintext
+        )
+
+        try await withGRPCServer(transport: serverTransport, services: [service]) { _ in
+            let port = try #require(try await serverTransport.listeningAddress.ipv4?.port)
+            let clientTransport = try HTTP2ClientTransport.Posix(
+                target: .ipv4(address: "127.0.0.1", port: port),
+                transportSecurity: .plaintext
+            )
+            _ = try await withGRPCClient(transport: clientTransport, interceptors: [interceptor]) { client in
+                await #expect(throws: RPCError.self) {
+                    _ = try await Echo_Echo.Client(wrapping: client).get(.with { $0.text = "ghost" })
+                }
+            }
+        }
+
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.state == .failure)
+        #expect(task.errorDomain == "gRPC")
+        #expect(task.errorCode == 5)
+        #expect(task.responseHeader("grpc-status") == "5")
+        // Pulse stores headers as `name: value` lines, so a leaked `:status` reads back
+        // under an empty key rather than one starting with ":".
+        #expect(task.responseHeaders.keys.allSatisfy { !$0.isEmpty && !$0.hasPrefix(":") })
+    }
 }
