@@ -100,3 +100,42 @@ func withEchoClient<Result: Sendable>(
         }
     }
 }
+
+/// A plain copy of a task's first transaction and the task fields it relates to.
+struct TransactionSnapshot {
+    let transactionCount: Int
+    let fetchType: URLSessionTaskMetrics.ResourceFetchType
+    let requestHeaders: [String: String]
+    let responseHeaders: [String: String]
+    let timing: NetworkLogger.TransactionTimingInfo
+    let size: NetworkLogger.TransferSizeInfo
+    let remoteAddress: String?
+    let networkProtocol: String?
+    let taskDuration: Double
+    let taskRequestBodySize: Int64
+    let taskResponseBodySize: Int64
+    let isFromCache: Bool
+
+    init?(_ task: NetworkTaskEntity) {
+        guard let transaction = task.orderedTransactions.first else { return nil }
+        transactionCount = task.orderedTransactions.count
+        fetchType = transaction.fetchType
+        requestHeaders = transaction.request.headers
+        responseHeaders = transaction.response?.headers ?? [:]
+        timing = transaction.timing
+        size = transaction.transferSize
+        remoteAddress = transaction.remoteAddress
+        networkProtocol = transaction.networkProtocol
+        taskDuration = task.duration
+        taskRequestBodySize = task.requestBodySize
+        taskResponseBodySize = task.responseBodySize
+        isFromCache = task.isFromCache
+    }
+}
+
+func transactionSnapshots(in store: LoggerStore) throws -> [TransactionSnapshot] {
+    let context = store.newBackgroundContext()
+    return try context.performAndWait {
+        try store.tasks(context: context).compactMap(TransactionSnapshot.init)
+    }
+}

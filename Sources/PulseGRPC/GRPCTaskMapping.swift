@@ -54,6 +54,25 @@ enum GRPCTaskMapping {
         }
     }
 
+    /// Splits a `ClientContext` peer description into an IP address and a port.
+    ///
+    /// - `ipv4:127.0.0.1:31415` → (`127.0.0.1`, `31415`)
+    /// - `ipv6:[::1]:443` → (`::1`, `443`)
+    /// - anything else, e.g. `in-process:27182` or `unix:/tmp/socket` → (`nil`, `nil`)
+    static func address(fromPeer peer: String) -> (address: String?, port: Int?) {
+        let parts = peer.split(separator: ":", maxSplits: 1)
+        guard parts.count == 2, parts[0] == "ipv4" || parts[0] == "ipv6",
+              let separator = parts[1].lastIndex(of: ":"),
+              let port = Int(parts[1][parts[1].index(after: separator)...]) else {
+            return (nil, nil)
+        }
+        var host = parts[1][..<separator]
+        if host.hasPrefix("["), host.hasSuffix("]") {
+            host = host.dropFirst().dropLast()
+        }
+        return host.isEmpty ? (nil, nil) : (String(host), port)
+    }
+
     // MARK: Request
 
     static func makeRequest(baseURL: URL?, context: ClientContext, metadata: Metadata) -> URLRequest {
@@ -104,6 +123,12 @@ enum GRPCTaskMapping {
             }
         }
         return headers
+    }
+
+    /// The uncompressed size of `name: value` lines, a stand-in for header bytes on the wire
+    /// (HTTP/2 compresses them with HPACK).
+    static func estimatedSize(ofHeaders headers: [String: String]?) -> Int64 {
+        Int64((headers ?? [:]).reduce(0) { $0 + $1.key.utf8.count + 2 + $1.value.utf8.count + 2 })
     }
 
     static func removingContentType(from headers: [String: String]) -> [String: String] {

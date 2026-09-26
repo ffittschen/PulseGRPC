@@ -22,6 +22,10 @@ final class RPCRecorder: Sendable {
         var initialMetadata: Metadata = [:]
         var trailingMetadata: Metadata?
         var isRequestFinished = false
+        /// When the request producer returned.
+        var requestEndDate: Date?
+        /// When `next` returned, i.e. the first response part (headers or trailers-only) arrived.
+        var responseStartDate: Date?
         /// An outcome waiting for the request side to finish, see `finishAfterRequest(_:)`.
         var pendingCompletion: Completion?
         var isFinished = false
@@ -45,6 +49,8 @@ final class RPCRecorder: Sendable {
     private let startInstant = ContinuousClock.now
     private let timeout: Duration?
     private let request: URLRequest
+    private let remotePeer: String
+    private let localPeer: String
     private let logger: NetworkLogger
     private let label: String?
     private let jsonEncodingOptions: JSONEncodingOptions
@@ -53,11 +59,15 @@ final class RPCRecorder: Sendable {
     init(
         request: URLRequest,
         requestMetadata: Metadata,
+        remotePeer: String,
+        localPeer: String,
         logger: NetworkLogger,
         label: String?,
         jsonEncodingOptions: JSONEncodingOptions
     ) {
         self.request = request
+        self.remotePeer = remotePeer
+        self.localPeer = localPeer
         self.timeout = Array(requestMetadata[stringValues: "grpc-timeout"]).first
             .flatMap(GRPCTaskMapping.timeout(fromHeaderValue:))
         self.logger = logger
@@ -100,6 +110,12 @@ final class RPCRecorder: Sendable {
         state.withLock { $0.initialMetadata = metadata }
     }
 
+    /// Called when `next` returns a response, accepted or rejected.
+    func responseDidStart() {
+        let date = Date()
+        state.withLock { $0.responseStartDate = $0.responseStartDate ?? date }
+    }
+
     func recordTrailingMetadata(_ metadata: Metadata) {
         state.withLock { $0.trailingMetadata = metadata }
     }
@@ -121,8 +137,10 @@ final class RPCRecorder: Sendable {
 
     /// Called when the request producer returns or throws.
     func requestDidFinish() {
+        let date = Date()
         let finished: (State, Completion)? = state.withLock { state in
             state.isRequestFinished = true
+            state.requestEndDate = date
             guard !state.isFinished, let completion = state.pendingCompletion else { return nil }
             state.isFinished = true
             return (state, completion)
@@ -210,20 +228,66 @@ final class RPCRecorder: Sendable {
     }
 
     private func log(_ state: State, response: HTTPURLResponse?, error: (any Error)?, endDate: Date) {
+        let endDate = max(endDate, startDate)
+        let requestBody = GRPCTaskMapping.body(fromJSONMessages: state.requestMessages)
+        let responseBody = GRPCTaskMapping.body(fromJSONMessages: state.responseMessages)
         logger.logTaskCompleted(
             taskId: taskId,
             request: request,
             response: response,
             error: error,
-            requestBody: GRPCTaskMapping.body(fromJSONMessages: state.requestMessages),
-            responseBody: GRPCTaskMapping.body(fromJSONMessages: state.responseMessages),
+            requestBody: requestBody,
+            responseBody: responseBody,
             metrics: NetworkLogger.Metrics(
-                taskInterval: DateInterval(start: startDate, end: max(endDate, startDate)),
+                taskInterval: DateInterval(start: startDate, end: endDate),
                 redirectCount: 0,
-                transactions: []
+                transactions: [makeTransaction(state, response: response, requestBody: requestBody, responseBody: responseBody, endDate: endDate)]
             ),
             label: label
         )
+    }
+
+    /// One synthetic `.networkLoad` transaction, so PulseUI shows the transfer sizes and
+    /// a timing chart. Body sizes are JSON sizes, header sizes are uncompressed estimates.
+    private func makeTransaction(
+        _ state: State,
+        response: HTTPURLResponse?,
+        requestBody: Data?,
+        responseBody: Data?,
+        endDate: Date
+    ) -> NetworkLogger.TransactionMetrics {
+        var transaction = NetworkLogger.TransactionMetrics(
+            request: NetworkLogger.Request(request),
+            response: response.map(NetworkLogger.Response.init),
+            resourceFetchType: .networkLoad
+        )
+
+        let responseStartDate = response == nil ? nil : min(state.responseStartDate ?? endDate, endDate)
+        transaction.timing.fetchStartDate = startDate
+        transaction.timing.requestStartDate = startDate
+        // Streaming calls can keep sending after the response started. The chart assumes
+        // request → waiting → response, so the request end is only shown when it came first.
+        if let requestEndDate = state.requestEndDate, requestEndDate <= (responseStartDate ?? endDate) {
+            transaction.timing.requestEndDate = requestEndDate
+        }
+        transaction.timing.responseStartDate = responseStartDate
+        transaction.timing.responseEndDate = endDate
+
+        let requestBodySize = Int64(requestBody?.count ?? 0)
+        let responseBodySize = Int64(responseBody?.count ?? 0)
+        transaction.transferSize.requestHeaderBytesSent = GRPCTaskMapping.estimatedSize(ofHeaders: request.allHTTPHeaderFields)
+        transaction.transferSize.requestBodyBytesBeforeEncoding = requestBodySize
+        transaction.transferSize.requestBodyBytesSent = requestBodySize
+        transaction.transferSize.responseHeaderBytesReceived = GRPCTaskMapping.estimatedSize(ofHeaders: transaction.response?.headers)
+        transaction.transferSize.responseBodyBytesReceived = responseBodySize
+        transaction.transferSize.responseBodyBytesAfterDecoding = responseBodySize
+
+        (transaction.remoteAddress, transaction.remotePort) = GRPCTaskMapping.address(fromPeer: remotePeer)
+        (transaction.localAddress, transaction.localPort) = GRPCTaskMapping.address(fromPeer: localPeer)
+        if transaction.remoteAddress != nil {
+            transaction.networkProtocol = "h2" // The NIO transports speak HTTP/2; in-process has no protocol.
+        }
+        return transaction
     }
 
     private func makeResponse(_ state: State, rpcError: RPCError?) -> HTTPURLResponse? {

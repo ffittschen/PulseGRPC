@@ -55,6 +55,8 @@ public struct PulseClientInterceptor: ClientInterceptor {
         let recorder = RPCRecorder(
             request: GRPCTaskMapping.makeRequest(baseURL: baseURL, context: context, metadata: request.metadata),
             requestMetadata: request.metadata,
+            remotePeer: context.remotePeer,
+            localPeer: context.localPeer,
             logger: logger ?? .shared,
             label: label,
             jsonEncodingOptions: jsonEncodingOptions
@@ -75,6 +77,7 @@ public struct PulseClientInterceptor: ClientInterceptor {
             recorder.finish(.threw(error, isCancelled: Task.isCancelled))
             throw error
         }
+        recorder.responseDidStart()
 
         switch response.accepted {
         case .success(var contents):
