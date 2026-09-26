@@ -277,26 +277,71 @@ import Testing
         #expect(task.responseBody == #"{"text":"a"}"#)
     }
 
-    @Test func deadlineExceededIsLoggedAsFailure() async throws {
+    @Test func cancelledCallWithTimeoutReportsTimeoutAndElapsedTime() async throws {
         let store = try makeStore()
         let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
         let gate = Gate()
 
         try await withEchoClient(service: EchoService(gate: gate), interceptors: [interceptor]) { client in
             var options = CallOptions.defaults
-            options.timeout = .milliseconds(50)
+            options.timeout = .seconds(10)
+            let call = Task { try await client.get(.with { $0.text = "slow" }, options: options) }
+            try await eventually { try snapshots(in: store).first?.state == .pending }
+            try await Task.sleep(for: .milliseconds(50))
+            call.cancel()
+            _ = await call.result
+            await gate.open()
+        }
+
+        try await eventually { try snapshots(in: store).first?.state == .failure }
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.errorCode == 1)
+        #expect(task.errorDebugDescription?.contains("CANCELLED (1): The RPC was cancelled (grpc-timeout 10s, ") == true)
+        #expect(task.errorDebugDescription?.contains("ms elapsed).") == true)
+    }
+
+    @Test func cancelledCallWithoutTimeoutKeepsPlainMessage() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+        let gate = Gate()
+
+        try await withEchoClient(service: EchoService(gate: gate), interceptors: [interceptor]) { client in
+            let call = Task { try await client.get(.with { $0.text = "slow" }) }
+            try await eventually { try snapshots(in: store).first?.state == .pending }
+            call.cancel()
+            _ = await call.result
+            await gate.open()
+        }
+
+        try await eventually { try snapshots(in: store).first?.state == .failure }
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.errorDebugDescription?.contains("CANCELLED (1): The RPC was cancelled.") == true)
+    }
+
+    @Test func deadlineExceededIsLoggedAsFailure() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+        let gate = Gate()
+
+        try await withEchoClient(service: EchoService(gate: gate), interceptors: [interceptor]) { client in
+            // Connect first: grpc-swift computes `grpc-timeout` before it waits for the
+            // connection, while the interceptor's clock only starts once the stream exists.
+            _ = try await client.collect { try await $0.write(.with { $0.text = "warm-up" }) }
+            var options = CallOptions.defaults
+            options.timeout = .milliseconds(300)
             await #expect(throws: RPCError.self) {
                 try await client.get(.with { $0.text = "slow" }, options: options)
             }
             await gate.open()
         }
 
-        try await eventually { try snapshots(in: store).first?.state == .failure }
-        let task = try #require(try snapshots(in: store).first)
+        try await eventually { try snapshots(in: store).contains { $0.state == .failure } }
+        let task = try #require(try snapshots(in: store).first { $0.url?.hasSuffix("/Get") == true })
         #expect(task.errorDomain == "gRPC")
         #expect(task.errorCode == 4)
         #expect(task.responseHeader("grpc-status") == "4")
         #expect(task.requestHeader("grpc-timeout") != nil)
+        #expect(task.errorDebugDescription?.contains("(grpc-timeout 300ms, ") == true)
     }
 
     // MARK: Logger configuration

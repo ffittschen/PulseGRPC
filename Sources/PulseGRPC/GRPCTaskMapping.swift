@@ -154,6 +154,14 @@ enum GRPCTaskMapping {
         }
     }
 
+    /// Formats a duration for status messages, e.g. `160ms` or `2.5s`.
+    static func format(_ duration: Duration) -> String {
+        let milliseconds = Int((duration / .milliseconds(1)).rounded())
+        guard milliseconds >= 1000 else { return "\(milliseconds)ms" }
+        let tenths = (milliseconds + 50) / 100
+        return tenths % 10 == 0 ? "\(tenths / 10)s" : "\(tenths / 10).\(tenths % 10)s"
+    }
+
     // MARK: Status & Errors
 
     /// The canonical gRPC status name, e.g. `NOT_FOUND` for `5`.

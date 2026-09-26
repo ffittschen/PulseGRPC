@@ -179,13 +179,20 @@ final class RPCRecorder: Sendable {
 
     /// `DEADLINE_EXCEEDED` if the request's `grpc-timeout` has run out, `CANCELLED` otherwise.
     ///
-    /// grpc-swift computes `grpc-timeout` just before the interceptors run, so the
-    /// recorder's clock starts slightly later. The tolerance absorbs that gap.
+    /// grpc-swift computes `grpc-timeout` before it waits for a connection, while this clock
+    /// starts once the stream exists. The 20 ms tolerance absorbs the usual gap; on a slow
+    /// first connection a deadline can still read as `CANCELLED`, so the message says how
+    /// much time was allowed and how much had passed.
     private func cancellationError() -> RPCError {
-        if let timeout, ContinuousClock.now - startInstant + .milliseconds(20) >= timeout {
-            return RPCError(code: .deadlineExceeded, message: "RPC timed out before completing")
+        guard let timeout else {
+            return RPCError(code: .cancelled, message: "The RPC was cancelled.")
         }
-        return RPCError(code: .cancelled, message: "The RPC was cancelled.")
+        let elapsed = ContinuousClock.now - startInstant
+        let details = "grpc-timeout \(GRPCTaskMapping.format(timeout)), \(GRPCTaskMapping.format(elapsed)) elapsed"
+        if elapsed + .milliseconds(20) >= timeout {
+            return RPCError(code: .deadlineExceeded, message: "RPC timed out before completing (\(details)).")
+        }
+        return RPCError(code: .cancelled, message: "The RPC was cancelled (\(details)).")
     }
 
     private func log(_ state: State, _ completion: Completion) {

@@ -108,6 +108,16 @@ import Testing
         #expect(GRPCTaskMapping.timeout(fromHeaderValue: value) == nil)
     }
 
+    @Test(arguments: [
+        (Duration.milliseconds(160), "160ms"),
+        (.microseconds(299_985), "300ms"),
+        (.milliseconds(2_500), "2.5s"),
+        (.microseconds(9_999_980), "10s"),
+    ])
+    func formatsDurations(duration: Duration, expected: String) {
+        #expect(GRPCTaskMapping.format(duration) == expected)
+    }
+
     @Test func cancellationMapsToCancelled() {
         #expect(GRPCTaskMapping.rpcError(from: CancellationError()).code == .cancelled)
     }
