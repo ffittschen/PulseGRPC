@@ -121,7 +121,7 @@ NetworkLogger.shared = NetworkLogger {
 
 ## Example app
 
-`Examples/PulseGRPCExample.swiftpm` is an iOS app package; open it in Xcode and run it on an iOS 18 or later simulator. It talks to an in-process Echo server, so it needs no network, and it makes every kind of RPC, including a failing call and a deadline. One REST call shows the two side by side.
+`Examples/PulseGRPCExample.swiftpm` is an iOS app package; open it in Xcode and run it on an iOS 18 or later simulator. It talks to an in-process Echo server, so the gRPC calls need no network, and it makes every kind of RPC, including a failing call and a deadline. One REST call shows the two side by side.
 
 ## Known limitations
 
