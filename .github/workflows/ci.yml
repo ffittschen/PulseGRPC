@@ -75,11 +75,25 @@ jobs:
 
   xcode-27:
     name: swift test (Xcode 27, preview)
-    runs-on: xcode-27
+    runs-on: macos-26
     timeout-minutes: 20
     continue-on-error: true
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
-      - run: swift test
+      - name: Select Xcode 27 if installed
+        run: |
+          shopt -s nullglob
+          search_root="${XCODE27_SEARCH_ROOT:-/Applications}"
+          matches=("$search_root"/Xcode_27*.app)
+          if [ ${#matches[@]} -eq 0 ]; then
+            echo "::notice::No Xcode 27 install found under $search_root (looked for Xcode_27*.app); skipping the preview swift test."
+            exit 0
+          fi
+          newest=$(printf '%s\n' "${matches[@]}" | sort -V | tail -n 1)
+          echo "Found Xcode 27 install: $newest"
+          echo "XCODE27_DEVELOPER_DIR=$newest/Contents/Developer" >> "$GITHUB_ENV"
+      - name: swift test
+        if: env.XCODE27_DEVELOPER_DIR != ''
+        env:
+          DEVELOPER_DIR: ${{ env.XCODE27_DEVELOPER_DIR }}
+        run: swift test
