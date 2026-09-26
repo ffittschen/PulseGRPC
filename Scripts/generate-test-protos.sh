@@ -1,30 +1,24 @@
-#!/bin/bash
-# Regenerates the checked-in Echo fixtures used by PulseGRPCTests.
+#!/usr/bin/env bash
+# Regenerates the checked-in Echo fixtures used by PulseGRPCTests and the example app.
 #
-# Requires `protoc` on PATH (e.g. `brew install protobuf`). The Swift plugins are
-# built from the package versions this package resolves, so the generated code
-# always matches the runtime used by the tests.
+# Requires `protoc` on PATH (e.g. `brew install protobuf`). The Swift plugins are built
+# from this package's resolved dependencies, so the generated code matches the runtime.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-swift package resolve
+command -v protoc >/dev/null || { echo "protoc not found (brew install protobuf)" >&2; exit 1; }
 
-build_plugin() {
-    local package="$1" product="$2"
-    swift build -c release --package-path ".build/checkouts/$package" --product "$product" >&2
-    echo "$(swift build -c release --package-path ".build/checkouts/$package" --show-bin-path)/$product"
-}
-
-PROTOC_GEN_SWIFT="$(build_plugin swift-protobuf protoc-gen-swift)"
-PROTOC_GEN_GRPC_SWIFT="$(build_plugin grpc-swift-protobuf protoc-gen-grpc-swift-2)"
+swift build -c release --product protoc-gen-swift
+swift build -c release --product protoc-gen-grpc-swift-2
+BIN="$(swift build -c release --show-bin-path)"
 
 FIXTURES="Tests/PulseGRPCTests/Fixtures"
 
 protoc \
     --proto_path="$FIXTURES" \
-    --plugin=protoc-gen-swift="$PROTOC_GEN_SWIFT" \
-    --plugin=protoc-gen-grpc-swift-2="$PROTOC_GEN_GRPC_SWIFT" \
+    --plugin=protoc-gen-swift="$BIN/protoc-gen-swift" \
+    --plugin=protoc-gen-grpc-swift-2="$BIN/protoc-gen-grpc-swift-2" \
     --swift_out="$FIXTURES" \
     --swift_opt=Visibility=Internal \
     --grpc-swift-2_out="$FIXTURES" \
