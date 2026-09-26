@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+
+jobs:
+  swift-test:
+    name: swift test (macOS, Xcode 26.6)
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-xcode26.6-${{ hashFiles('Package.resolved') }}
+      - run: swift build --build-tests
+      - run: swift test --skip-build
+
+  build:
+    name: xcodebuild (${{ matrix.platform }})
+    runs-on: macos-26
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iOS Simulator, tvOS Simulator, watchOS Simulator, visionOS Simulator]
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          set -o pipefail
+          xcodebuild build -scheme PulseGRPC -destination "generic/platform=${{ matrix.platform }}" | xcbeautify
+
+  ios-test:
+    name: xcodebuild test (iOS 26.5 Simulator)
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          set -o pipefail
+          xcodebuild test -scheme PulseGRPC -destination "platform=iOS Simulator,OS=26.5,name=iPhone 17 Pro" \
+            -collect-test-diagnostics never | xcbeautify
+
+  example:
+    name: xcodebuild (example app)
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          set -o pipefail
+          cd Examples/PulseGRPCExample.swiftpm
+          xcodebuild build -scheme PulseGRPCExample -destination "generic/platform=iOS Simulator" \
+            -onlyUsePackageVersionsFromResolvedFile | xcbeautify
+
+  minimum-xcode:
+    name: swift build (Xcode 26.0.1)
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - run: swift build
+
+  xcode-27:
+    name: swift test (Xcode 27, preview)
+    runs-on: xcode-27
+    timeout-minutes: 20
+    continue-on-error: true
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - run: swift test
