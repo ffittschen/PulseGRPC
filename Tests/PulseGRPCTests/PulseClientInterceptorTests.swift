@@ -74,7 +74,6 @@ import Testing
         #expect(Set(tasks.compactMap(\.requestBody)).count == 10)
     }
 
-    /// Review focus 5.
     @Test func requestMetadataIsStoredAsHeaders() async throws {
         let store = try makeStore()
         let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
@@ -158,7 +157,6 @@ import Testing
         #expect(task.responseBody == #"[{"text":"x"},{"text":"y"}]"#)
     }
 
-    /// Review focus 2.
     @Test func serverStreamFailingMidwayKeepsReceivedMessages() async throws {
         let store = try makeStore()
         let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
@@ -180,7 +178,6 @@ import Testing
         #expect(task.responseBody == #"[{"text":"a"},{"text":"b"}]"#)
     }
 
-    /// Review focus 1.
     @Test func concurrentCallsAreLoggedAsSeparateTasks() async throws {
         let store = try makeStore()
         let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
@@ -238,7 +235,6 @@ import Testing
         #expect(task.errorCode == 1)
     }
 
-    /// Review focus 3.
     @Test func cancelledStreamIsLoggedAsCancelled() async throws {
         let store = try makeStore()
         let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
@@ -267,7 +263,6 @@ import Testing
         #expect(task.responseBody == #"{"text":"a"}"#)
     }
 
-    /// Review focus 4.
     @Test func deadlineExceededIsLoggedAsFailure() async throws {
         let store = try makeStore()
         let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))

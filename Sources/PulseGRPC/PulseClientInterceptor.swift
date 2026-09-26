@@ -21,6 +21,8 @@ public struct PulseClientInterceptor: ClientInterceptor {
     private let label: String?
     private let jsonEncodingOptions: JSONEncodingOptions
 
+    /// Creates an interceptor that logs each RPC attempt to Pulse as a network task.
+    ///
     /// - parameters:
     ///   - baseURL: The server's URL, e.g. `https://api.example.com:443`. Used for the
     ///     logged URL (`grpcs://…` for `https`, `grpc://…` otherwise). If `nil`, the
@@ -40,6 +42,8 @@ public struct PulseClientInterceptor: ClientInterceptor {
         self.jsonEncodingOptions = jsonEncodingOptions
     }
 
+    /// Logs the RPC attempt: creates a pending task, records the request and response
+    /// messages as the call runs, and completes the task when the call ends.
     public func intercept<Input: Sendable, Output: Sendable>(
         request: StreamingClientRequest<Input>,
         context: ClientContext,
