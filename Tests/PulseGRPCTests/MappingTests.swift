@@ -103,12 +103,17 @@ import Testing
         ("1H", .seconds(3600)),
         ("7u", .microseconds(7)),
         ("9n", .nanoseconds(9)),
+        ("0n", .zero),
+        // 8 digits: grpc-swift sends a 30 s timeout like this.
+        ("29999986u", .microseconds(29_999_986)),
+        ("99999999H", .seconds(99_999_999 * 3600)),
     ])
     func parsesGRPCTimeout(value: String, expected: Duration) {
         #expect(Duration(grpcTimeout: value) == expected)
     }
 
-    @Test(arguments: ["", "m", "12", "12x"])
+    /// The spec allows 1 to 8 ASCII digits followed by a unit.
+    @Test(arguments: ["", "m", "12", "12x", "123456789S", "9999999999999999H", "-5S", "+5S", " 5S", "5 S", "٥S"])
     func rejectsInvalidGRPCTimeout(value: String) {
         #expect(Duration(grpcTimeout: value) == nil)
     }

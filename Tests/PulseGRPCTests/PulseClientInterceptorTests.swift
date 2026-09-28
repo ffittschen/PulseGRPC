@@ -284,7 +284,7 @@ import Testing
 
         try await withEchoClient(service: EchoService(gate: gate), interceptors: [interceptor]) { client in
             var options = CallOptions.defaults
-            options.timeout = .seconds(10)
+            options.timeout = .seconds(30) // Sent as an 8-digit `grpc-timeout`, e.g. `29999986u`.
             let call = Task { try await client.get(.with { $0.text = "slow" }, options: options) }
             try await eventually { try snapshots(in: store).first?.state == .pending }
             try await Task.sleep(for: .milliseconds(50))
@@ -296,7 +296,7 @@ import Testing
         try await eventually { try snapshots(in: store).first?.state == .failure }
         let task = try #require(try snapshots(in: store).first)
         #expect(task.errorCode == 1)
-        #expect(task.errorDebugDescription?.contains("CANCELLED (1): The RPC was cancelled (grpc-timeout 10s, ") == true)
+        #expect(task.errorDebugDescription?.contains("CANCELLED (1): The RPC was cancelled (grpc-timeout 30s, ") == true)
         #expect(task.errorDebugDescription?.contains("ms elapsed).") == true)
     }
 
