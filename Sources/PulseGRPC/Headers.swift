@@ -15,12 +15,6 @@ extension [String: String] {
             uniquingKeysWith: { "\($0), \($1)" }
         )
     }
-
-    /// The uncompressed size of `name: value` lines, a stand-in for header bytes on the wire
-    /// (HTTP/2 compresses them with HPACK).
-    var estimatedSize: Int64 {
-        Int64(reduce(0) { $0 + $1.key.utf8.count + 2 + $1.value.utf8.count + 2 })
-    }
 }
 
 private extension Metadata.Value {

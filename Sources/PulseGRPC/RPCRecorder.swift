@@ -277,10 +277,10 @@ final class RPCRecorder: Sendable {
 
         let requestBodySize = Int64(requestBody?.count ?? 0)
         let responseBodySize = Int64(responseBody?.count ?? 0)
-        transaction.transferSize.requestHeaderBytesSent = (request.allHTTPHeaderFields ?? [:]).estimatedSize
+        transaction.transferSize.requestHeaderBytesSent = estimatedSize(ofHeaders: request.allHTTPHeaderFields)
         transaction.transferSize.requestBodyBytesBeforeEncoding = requestBodySize
         transaction.transferSize.requestBodyBytesSent = requestBodySize
-        transaction.transferSize.responseHeaderBytesReceived = (transaction.response?.headers ?? [:]).estimatedSize
+        transaction.transferSize.responseHeaderBytesReceived = estimatedSize(ofHeaders: transaction.response?.headers)
         transaction.transferSize.responseBodyBytesReceived = responseBodySize
         transaction.transferSize.responseBodyBytesAfterDecoding = responseBodySize
 
@@ -298,5 +298,11 @@ final class RPCRecorder: Sendable {
             transaction.networkProtocol = "h2"
         }
         return transaction
+    }
+
+    /// The uncompressed size of `name: value` lines, a stand-in for header bytes on the wire
+    /// (HTTP/2 compresses them with HPACK).
+    private func estimatedSize(ofHeaders headers: [String: String]?) -> Int64 {
+        Int64((headers ?? [:]).reduce(0) { $0 + $1.key.utf8.count + 2 + $1.value.utf8.count + 2 })
     }
 }
