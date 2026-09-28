@@ -108,7 +108,7 @@ import Testing
         #expect(transaction.networkProtocol == nil)
     }
 
-    /// Review focus 3: the in-process transport hid HTTP/2 pseudo-headers before.
+    /// The in-process transport doesn't pass HTTP/2 pseudo-headers, so this runs over the real one.
     @Test func http2TransportRecordsPeerWithoutPseudoHeaders() async throws {
         let store = try makeStore()
         let interceptor = PulseClientInterceptor(baseURL: URL(string: "http://127.0.0.1"), logger: NetworkLogger(store: store))
