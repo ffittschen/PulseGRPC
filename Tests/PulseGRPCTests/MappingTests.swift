@@ -4,21 +4,21 @@ import GRPCCore
 import SwiftProtobuf
 import Testing
 
-@Suite struct GRPCTaskMappingTests {
+@Suite struct MappingTests {
     private let descriptor = MethodDescriptor(
         service: ServiceDescriptor(fullyQualifiedService: "echo.Echo"),
         method: "Get"
     )
 
     @Test(arguments: [
-        ("ipv4:127.0.0.1:31415", "127.0.0.1:31415"),
-        ("ipv6:[::1]:443", "[::1]:443"),
-        ("in-process:27182", "in-process"),
-        ("unix:/tmp/socket", "unix"),
-        ("", "unknown"),
+        ("ipv4:127.0.0.1:31415", "grpc://127.0.0.1:31415/echo.Echo/Get"),
+        ("ipv6:[::1]:443", "grpc://[::1]:443/echo.Echo/Get"),
+        ("in-process:27182", "grpc://in-process/echo.Echo/Get"),
+        ("unix:/tmp/socket", "grpc://unix/echo.Echo/Get"),
+        ("", "grpc://unknown/echo.Echo/Get"),
     ])
-    func authorityFromRemotePeer(remotePeer: String, expected: String) {
-        #expect(GRPCTaskMapping.authority(fromRemotePeer: remotePeer) == expected)
+    func urlFallsBackToRemotePeer(remotePeer: String, expected: String) {
+        #expect(URL(baseURL: nil, remotePeer: remotePeer, descriptor: descriptor).absoluteString == expected)
     }
 
     @Test(arguments: [
@@ -29,13 +29,8 @@ import Testing
         ("https://example.com/api?x=1", "grpcs://example.com/api/echo.Echo/Get"),
     ])
     func urlFromBaseURL(baseURL: String, expected: String) throws {
-        let url = GRPCTaskMapping.url(baseURL: URL(string: baseURL), remotePeer: "ipv4:10.0.0.1:443", descriptor: descriptor)
+        let url = URL(baseURL: URL(string: baseURL), remotePeer: "ipv4:10.0.0.1:443", descriptor: descriptor)
         #expect(url.absoluteString == expected)
-    }
-
-    @Test func urlFallsBackToRemotePeer() {
-        let url = GRPCTaskMapping.url(baseURL: nil, remotePeer: "ipv4:10.0.0.1:443", descriptor: descriptor)
-        #expect(url.absoluteString == "grpc://10.0.0.1:443/echo.Echo/Get")
     }
 
     @Test func headersJoinRepeatedKeysAndEncodeBinaryValues() {
@@ -43,7 +38,7 @@ import Testing
         metadata.addString("2", forKey: "x-id")
         metadata.addBinary([0x01, 0x02], forKey: "x-token-bin")
 
-        let headers = GRPCTaskMapping.headers(from: metadata)
+        let headers = [String: String](metadata)
 
         #expect(headers["x-id"] == "1, 2")
         #expect(headers["x-token-bin"] == "AQI=")
@@ -52,21 +47,21 @@ import Testing
     /// The HTTP/2 transport passes pseudo-headers such as `:status` through as metadata.
     @Test func headersDropHTTP2PseudoHeaders() {
         let metadata: Metadata = [":status": "200", "x-id": "1"]
-        #expect(GRPCTaskMapping.headers(from: metadata) == ["x-id": "1"])
+        #expect([String: String](metadata) == ["x-id": "1"])
     }
 
     @Test func headersGroupKeysCaseInsensitively() {
         var metadata: Metadata = ["X-Id": "1"]
         metadata.addString("2", forKey: "x-id")
-        #expect(GRPCTaskMapping.headers(from: metadata) == ["X-Id": "1, 2"])
+        #expect([String: String](metadata) == ["X-Id": "1, 2"])
     }
 
     @Test func mergingJoinsKeysCaseInsensitively() {
-        #expect(GRPCTaskMapping.merging(["X-Id": "1"], ["x-id": "2", "y": "3"]) == ["X-Id": "1, 2", "y": "3"])
+        #expect(["X-Id": "1"].mergingHeaders(["x-id": "2", "y": "3"]) == ["X-Id": "1, 2", "y": "3"])
     }
 
     @Test func encodesProtobufMessagesAsJSON() {
-        let json = GRPCTaskMapping.encode(Google_Protobuf_StringValue("hello"), options: .init())
+        let json = String(json: Google_Protobuf_StringValue("hello"), options: .init())
         #expect(json == "\"hello\"")
     }
 
@@ -74,18 +69,18 @@ import Testing
         struct Custom: Sendable, CustomStringConvertible {
             var description: String { "custom \"value\"" }
         }
-        let json = GRPCTaskMapping.encode(Custom(), options: .init())
+        let json = String(json: Custom(), options: .init())
         #expect(json == #""custom \"value\"""#)
     }
 
     @Test func bodyShapeDependsOnMessageCount() {
-        #expect(GRPCTaskMapping.body(fromJSONMessages: []) == nil)
-        #expect(GRPCTaskMapping.body(fromJSONMessages: [#"{"a":1}"#]) == Data(#"{"a":1}"#.utf8))
-        #expect(GRPCTaskMapping.body(fromJSONMessages: ["1", "2"]) == Data("[1,2]".utf8))
+        #expect(Data(jsonMessages: []) == nil)
+        #expect(Data(jsonMessages: [#"{"a":1}"#]) == Data(#"{"a":1}"#.utf8))
+        #expect(Data(jsonMessages: ["1", "2"]) == Data("[1,2]".utf8))
     }
 
     @Test func errorUsesCanonicalStatusName() {
-        let error = GRPCTaskMapping.error(for: RPCError(code: .notFound, message: "user not found"))
+        let error = NSError(RPCError(code: .notFound, message: "user not found"))
         #expect(error.domain == "gRPC")
         #expect(error.code == 5)
         #expect(error.localizedDescription == "NOT_FOUND (5): user not found")
@@ -100,12 +95,12 @@ import Testing
         ("9n", .nanoseconds(9)),
     ])
     func parsesGRPCTimeout(value: String, expected: Duration) {
-        #expect(GRPCTaskMapping.timeout(fromHeaderValue: value) == expected)
+        #expect(Duration(grpcTimeout: value) == expected)
     }
 
     @Test(arguments: ["", "m", "12", "12x"])
     func rejectsInvalidGRPCTimeout(value: String) {
-        #expect(GRPCTaskMapping.timeout(fromHeaderValue: value) == nil)
+        #expect(Duration(grpcTimeout: value) == nil)
     }
 
     @Test(arguments: [
@@ -115,10 +110,10 @@ import Testing
         (.microseconds(9_999_980), "10s"),
     ])
     func formatsDurations(duration: Duration, expected: String) {
-        #expect(GRPCTaskMapping.format(duration) == expected)
+        #expect(duration.statusMessageDescription == expected)
     }
 
     @Test func cancellationMapsToCancelled() {
-        #expect(GRPCTaskMapping.rpcError(from: CancellationError()).code == .cancelled)
+        #expect(RPCError(mapping: CancellationError()).code == .cancelled)
     }
 }

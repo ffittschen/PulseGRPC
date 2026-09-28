@@ -31,7 +31,7 @@ struct RecordingBodyParts<Output: Sendable>: AsyncSequence, Sendable {
                 }
                 return part
             } catch {
-                recorder.finish(.failed(GRPCTaskMapping.rpcError(from: error), isCancelled: Task.isCancelled))
+                recorder.finish(.failed(RPCError(mapping: error), isCancelled: Task.isCancelled))
                 throw error
             }
         }

@@ -53,7 +53,7 @@ public struct PulseClientInterceptor: ClientInterceptor {
         ) async throws -> StreamingClientResponse<Output>
     ) async throws -> StreamingClientResponse<Output> {
         let recorder = RPCRecorder(
-            request: GRPCTaskMapping.makeRequest(baseURL: baseURL, context: context, metadata: request.metadata),
+            request: URLRequest(baseURL: baseURL, context: context, metadata: request.metadata),
             requestMetadata: request.metadata,
             remotePeer: context.remotePeer,
             localPeer: context.localPeer,

@@ -68,8 +68,7 @@ final class RPCRecorder: Sendable {
         self.request = request
         self.remotePeer = remotePeer
         self.localPeer = localPeer
-        self.timeout = Array(requestMetadata[stringValues: "grpc-timeout"]).first
-            .flatMap(GRPCTaskMapping.timeout(fromHeaderValue:))
+        self.timeout = Array(requestMetadata[stringValues: "grpc-timeout"]).first.flatMap(Duration.init(grpcTimeout:))
         self.logger = logger
         self.label = label
         self.jsonEncodingOptions = jsonEncodingOptions
@@ -93,14 +92,14 @@ final class RPCRecorder: Sendable {
     }
 
     func recordRequestMessage(_ message: some Sendable) {
-        let json = GRPCTaskMapping.encode(message, options: jsonEncodingOptions)
+        let json = String(json: message, options: jsonEncodingOptions)
         state.withLock { state in
             if !state.isFinished { state.requestMessages.append(json) }
         }
     }
 
     func recordResponseMessage(_ message: some Sendable) {
-        let json = GRPCTaskMapping.encode(message, options: jsonEncodingOptions)
+        let json = String(json: message, options: jsonEncodingOptions)
         state.withLock { state in
             if !state.isFinished { state.responseMessages.append(json) }
         }
@@ -181,7 +180,7 @@ final class RPCRecorder: Sendable {
                 return .rpc(cancellationError(), withResponse: false)
             }
             if error is RPCError || error is any RPCErrorConvertible {
-                return .rpc(GRPCTaskMapping.rpcError(from: error), withResponse: false)
+                return .rpc(RPCError(mapping: error), withResponse: false)
             }
             return .other(error)
         }
@@ -206,7 +205,7 @@ final class RPCRecorder: Sendable {
             return RPCError(code: .cancelled, message: "The RPC was cancelled.")
         }
         let elapsed = ContinuousClock.now - startInstant
-        let details = "grpc-timeout \(GRPCTaskMapping.format(timeout)), \(GRPCTaskMapping.format(elapsed)) elapsed"
+        let details = "grpc-timeout \(timeout.statusMessageDescription), \(elapsed.statusMessageDescription) elapsed"
         if elapsed + .milliseconds(20) >= timeout {
             return RPCError(code: .deadlineExceeded, message: "RPC timed out before completing (\(details)).")
         }
@@ -216,12 +215,15 @@ final class RPCRecorder: Sendable {
     private func log(_ state: State, _ completion: Completion) {
         switch completion.result {
         case .rpc(let rpcError, let withResponse):
-            log(
-                state,
-                response: withResponse ? makeResponse(state, rpcError: rpcError) : nil,
-                error: rpcError.map(GRPCTaskMapping.error(for:)),
-                endDate: completion.endDate
-            )
+            let response = withResponse ? request.url.flatMap { url in
+                HTTPURLResponse(
+                    url: url,
+                    initialMetadata: state.initialMetadata,
+                    trailingMetadata: state.trailingMetadata,
+                    rpcError: rpcError
+                )
+            } : nil
+            log(state, response: response, error: rpcError.map(NSError.init), endDate: completion.endDate)
         case .other(let error):
             log(state, response: nil, error: error, endDate: completion.endDate)
         }
@@ -229,8 +231,8 @@ final class RPCRecorder: Sendable {
 
     private func log(_ state: State, response: HTTPURLResponse?, error: (any Error)?, endDate: Date) {
         let endDate = max(endDate, startDate)
-        let requestBody = GRPCTaskMapping.body(fromJSONMessages: state.requestMessages)
-        let responseBody = GRPCTaskMapping.body(fromJSONMessages: state.responseMessages)
+        let requestBody = Data(jsonMessages: state.requestMessages)
+        let responseBody = Data(jsonMessages: state.responseMessages)
         logger.logTaskCompleted(
             taskId: taskId,
             request: request,
@@ -275,36 +277,20 @@ final class RPCRecorder: Sendable {
 
         let requestBodySize = Int64(requestBody?.count ?? 0)
         let responseBodySize = Int64(responseBody?.count ?? 0)
-        transaction.transferSize.requestHeaderBytesSent = GRPCTaskMapping.estimatedSize(ofHeaders: request.allHTTPHeaderFields)
+        transaction.transferSize.requestHeaderBytesSent = (request.allHTTPHeaderFields ?? [:]).estimatedSize
         transaction.transferSize.requestBodyBytesBeforeEncoding = requestBodySize
         transaction.transferSize.requestBodyBytesSent = requestBodySize
-        transaction.transferSize.responseHeaderBytesReceived = GRPCTaskMapping.estimatedSize(ofHeaders: transaction.response?.headers)
+        transaction.transferSize.responseHeaderBytesReceived = (transaction.response?.headers ?? [:]).estimatedSize
         transaction.transferSize.responseBodyBytesReceived = responseBodySize
         transaction.transferSize.responseBodyBytesAfterDecoding = responseBodySize
 
-        (transaction.remoteAddress, transaction.remotePort) = GRPCTaskMapping.address(fromPeer: remotePeer)
-        (transaction.localAddress, transaction.localPort) = GRPCTaskMapping.address(fromPeer: localPeer)
-        if transaction.remoteAddress != nil {
+        let remoteAddress = PeerAddress(peer: remotePeer)
+        let localAddress = PeerAddress(peer: localPeer)
+        (transaction.remoteAddress, transaction.remotePort) = (remoteAddress?.host, remoteAddress?.port)
+        (transaction.localAddress, transaction.localPort) = (localAddress?.host, localAddress?.port)
+        if remoteAddress != nil {
             transaction.networkProtocol = "h2" // The NIO transports speak HTTP/2; in-process has no protocol.
         }
         return transaction
-    }
-
-    private func makeResponse(_ state: State, rpcError: RPCError?) -> HTTPURLResponse? {
-        guard let url = request.url else { return nil }
-        var headers = GRPCTaskMapping.merging(
-            GRPCTaskMapping.headers(from: state.initialMetadata),
-            GRPCTaskMapping.headers(from: state.trailingMetadata ?? [:])
-        )
-        if let rpcError {
-            headers = GRPCTaskMapping.merging(headers, GRPCTaskMapping.headers(from: rpcError.metadata))
-        }
-        headers = GRPCTaskMapping.removingContentType(from: headers)
-        headers["grpc-status"] = String(rpcError?.code.rawValue ?? 0)
-        if let message = rpcError?.message, !message.isEmpty {
-            headers["grpc-message"] = message
-        }
-        headers["Content-Type"] = GRPCTaskMapping.contentType
-        return HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/2", headerFields: headers)
     }
 }

@@ -85,16 +85,14 @@ import Testing
         ("ipv6:[::1]:443", "::1", 443),
     ])
     func addressFromPeer(peer: String, address: String, port: Int) {
-        let result = GRPCTaskMapping.address(fromPeer: peer)
-        #expect(result.address == address)
-        #expect(result.port == port)
+        let result = PeerAddress(peer: peer)
+        #expect(result?.host == address)
+        #expect(result?.port == port)
     }
 
     @Test(arguments: ["in-process:27182", "unix:/tmp/socket", "", "ipv4:", "ipv4:1.2.3.4"])
     func addressFromNonIPPeerIsNil(peer: String) {
-        let result = GRPCTaskMapping.address(fromPeer: peer)
-        #expect(result.address == nil)
-        #expect(result.port == nil)
+        #expect(PeerAddress(peer: peer) == nil)
     }
 
     /// Review focus 3: the in-process transport hid HTTP/2 pseudo-headers before.
