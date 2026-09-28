@@ -50,14 +50,24 @@ import Testing
         #expect([String: String](metadata) == ["x-id": "1"])
     }
 
-    @Test func headersGroupKeysCaseInsensitively() {
+    @Test func headersLowercaseKeys() {
         var metadata: Metadata = ["X-Id": "1"]
         metadata.addString("2", forKey: "x-id")
-        #expect([String: String](metadata) == ["X-Id": "1, 2"])
+        #expect([String: String](metadata) == ["x-id": "1, 2"])
     }
 
-    @Test func mergingJoinsKeysCaseInsensitively() {
-        #expect(["X-Id": "1"].mergingHeaders(["x-id": "2", "y": "3"]) == ["X-Id": "1, 2", "y": "3"])
+    @Test func responseMergesInitialAndTrailingMetadata() throws {
+        let url = try #require(URL(string: "grpcs://example.com/echo.Echo/Get"))
+        let response = try #require(HTTPURLResponse(
+            url: url,
+            initialMetadata: ["x-id": "1", "content-type": "application/grpc"],
+            trailingMetadata: ["X-Id": "2"],
+            rpcError: RPCError(code: .notFound, message: "gone", metadata: ["x-id": "3"])
+        ))
+        #expect(response.value(forHTTPHeaderField: "x-id") == "1, 2, 3")
+        #expect(response.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(response.value(forHTTPHeaderField: "grpc-status") == "5")
+        #expect(response.value(forHTTPHeaderField: "grpc-message") == "gone")
     }
 
     @Test func encodesProtobufMessagesAsJSON() {

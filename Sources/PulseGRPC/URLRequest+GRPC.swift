@@ -7,7 +7,8 @@ extension URLRequest {
     init(baseURL: URL?, context: ClientContext, metadata: Metadata) {
         self.init(url: URL(baseURL: baseURL, remotePeer: context.remotePeer, descriptor: context.descriptor))
         httpMethod = "POST"
-        var headers = [String: String](metadata).removingContentType()
+        var headers = [String: String](metadata)
+        headers["content-type"] = nil
         headers["Content-Type"] = [String: String].jsonContentType
         allHTTPHeaderFields = headers
     }

@@ -95,7 +95,7 @@ To see only gRPC calls, filter by "URL begins with grpc", or by the `grpc` label
 |---|---|
 | URL | `{grpc,grpcs}://{host}[:{port}]{basePath}/{package.Service}/{Method}` |
 | Method | `POST` |
-| Request headers | Request metadata. Repeated keys are joined with `", "`, binary values are base64-encoded, and `Content-Type: application/json` is added. |
+| Request headers | Request metadata, with lowercase keys as HTTP/2 sends them. Repeated keys are joined with `", "`, binary values are base64-encoded, and `Content-Type: application/json` is added. |
 | Request body | The request messages as JSON. Two or more messages become a JSON array. |
 | Response | Status `200`, HTTP/2, headers from initial and trailing metadata plus `grpc-status` and `grpc-message` |
 | Response body | The response messages as JSON |

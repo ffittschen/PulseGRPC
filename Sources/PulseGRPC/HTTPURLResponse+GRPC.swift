@@ -10,11 +10,12 @@ extension HTTPURLResponse {
     ///   - rpcError: The call's error, or `nil` if it succeeded. Its metadata are the trailers
     ///     of a failed call.
     convenience init?(url: URL, initialMetadata: Metadata, trailingMetadata: Metadata?, rpcError: RPCError?) {
-        var headers = [String: String](initialMetadata).mergingHeaders([String: String](trailingMetadata ?? [:]))
+        var headers = [String: String](initialMetadata)
+            .merging([String: String](trailingMetadata ?? [:])) { "\($0), \($1)" }
         if let rpcError {
-            headers = headers.mergingHeaders([String: String](rpcError.metadata))
+            headers.merge([String: String](rpcError.metadata)) { "\($0), \($1)" }
         }
-        headers = headers.removingContentType()
+        headers["content-type"] = nil
         headers["grpc-status"] = String(rpcError?.code.rawValue ?? 0)
         if let message = rpcError?.message, !message.isEmpty {
             headers["grpc-message"] = message
