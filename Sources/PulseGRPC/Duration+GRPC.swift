@@ -3,12 +3,12 @@ import Foundation
 extension Duration {
     /// Parses a `grpc-timeout` value such as `50m` (50 ms) or `2S` (2 seconds).
     ///
-    /// Follows the gRPC spec (`PROTOCOL-HTTP2.md`, "Timeout"): 1 to 8 ASCII digits, then one of
-    /// `H`, `M`, `S`, `m`, `u` or `n`. Anything else is `nil`. The 8-digit limit also keeps
-    /// hours and minutes from overflowing.
+    /// Follows the gRPC spec ([`PROTOCOL-HTTP2.md`](https://github.com/grpc/grpc/blob/cf61c7d62a1a7f43b9d2ea6488186bc14fc41a8c/doc/PROTOCOL-HTTP2.md#requests),
+    /// "Timeout"): 1 to 8 ASCII digits, then one of `H`, `M`, `S`, `m`, `u` or `n`. Anything else
+    /// is `nil`. The 8-digit limit also keeps hours and minutes from overflowing.
     ///
-    /// This deliberately differs from grpc-swift's internal `Timeout(decoding:)`, which accepts at
-    /// most 8 characters. That rejects the 8-digit values grpc-swift itself sends, e.g.
+    /// This deliberately differs from grpc-swift-2's internal `Timeout(decoding:)`, which accepts
+    /// at most 8 characters. That rejects the 8-digit values grpc-swift-2 itself sends, e.g.
     /// `29999986u` for a 30 s timeout.
     init?(grpcTimeout value: String) {
         let digits = value.dropLast()
