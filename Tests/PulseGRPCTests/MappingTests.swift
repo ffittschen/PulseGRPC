@@ -16,6 +16,7 @@ import Testing
         ("in-process:27182", "grpc://in-process/echo.Echo/Get"),
         ("unix:/tmp/socket", "grpc://unix/echo.Echo/Get"),
         ("", "grpc://unknown/echo.Echo/Get"),
+        ("carrier pigeon", "grpc://unknown/echo.Echo/Get"),
     ])
     func urlFallsBackToRemotePeer(remotePeer: String, expected: String) {
         #expect(URL(baseURL: nil, remotePeer: remotePeer, descriptor: descriptor).absoluteString == expected)

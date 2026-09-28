@@ -84,7 +84,7 @@ To see only gRPC calls, filter by "URL begins with grpc", or by the `grpc` label
 
 | Parameter | Default | Description |
 |---|---|---|
-| `baseURL` | `nil` | The server URL, used for the logged URL. `https` and `grpcs` become `grpcs://`; anything else becomes `grpc://`. The path is kept; the query and fragment are dropped. `nil` uses the remote peer's address with `grpc://`. |
+| `baseURL` | `nil` | The server URL, used for the logged URL. `https` and `grpcs` become `grpcs://`; anything else becomes `grpc://`. The path is kept; the query and fragment are dropped. `nil` uses the remote peer's address with `grpc://`, on a best-effort basis (see Known limitations). |
 | `logger` | `nil` | The `NetworkLogger`. `nil` uses `NetworkLogger.shared`, looked up on every call. |
 | `label` | `"grpc"` | The task label. `nil` uses the logger's configured label. |
 | `jsonEncodingOptions` | `.init()` | SwiftProtobuf's `JSONEncodingOptions` for the bodies. |
@@ -100,7 +100,7 @@ To see only gRPC calls, filter by "URL begins with grpc", or by the `grpc` label
 | Response | Status `200`, HTTP/2, headers from initial and trailing metadata plus `grpc-status` and `grpc-message` |
 | Response body | The response messages as JSON |
 | Error | For a non-OK status, an `NSError` in the `gRPC` domain whose description reads e.g. `NOT_FOUND (5): user not found` |
-| Metrics | The duration, and one transaction with the JSON body sizes, estimated header sizes, the request/response timing and the peer address |
+| Metrics | The duration, and one transaction with the JSON body sizes, estimated header sizes, the request/response timing and the peer addresses |
 
 A task is pending until the call ends. A client-streaming or bidi request body only appears once the call has finished.
 
@@ -134,6 +134,7 @@ NetworkLogger.shared = NetworkLogger {
 - **Sizes are JSON sizes**, not wire sizes, and header sizes are estimates. Compression isn't visible.
 - **Long streams stay pending until they end**, and their messages are buffered in memory until then.
 - **Failed calls show a short status** in the console list, and the full description in the inspector.
+- **Peer addresses are best effort.** grpc-swift doesn't promise a format for its peer descriptions. `ipv4:` and `ipv6:` peers are split into address and port, and the protocol is shown as `h2`, which is inferred rather than reported. Any other description, e.g. `in-process:1`, is shown as it is.
 
 ## Development
 

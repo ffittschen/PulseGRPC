@@ -284,12 +284,18 @@ final class RPCRecorder: Sendable {
         transaction.transferSize.responseBodyBytesReceived = responseBodySize
         transaction.transferSize.responseBodyBytesAfterDecoding = responseBodySize
 
+        // Best effort: the peer descriptions have no stable format (see `PeerAddress`). An IP
+        // peer fills in the address and port like a URLSession task; any other description is
+        // shown as it is, without a port.
         let remoteAddress = PeerAddress(peer: remotePeer)
         let localAddress = PeerAddress(peer: localPeer)
-        (transaction.remoteAddress, transaction.remotePort) = (remoteAddress?.host, remoteAddress?.port)
-        (transaction.localAddress, transaction.localPort) = (localAddress?.host, localAddress?.port)
+        transaction.remoteAddress = remoteAddress?.host ?? (remotePeer.isEmpty ? nil : remotePeer)
+        transaction.remotePort = remoteAddress?.port
+        transaction.localAddress = localAddress?.host ?? (localPeer.isEmpty ? nil : localPeer)
+        transaction.localPort = localAddress?.port
         if remoteAddress != nil {
-            transaction.networkProtocol = "h2" // The NIO transports speak HTTP/2; in-process has no protocol.
+            // Inferred, not reported: IP peers come from the NIO transports, which speak HTTP/2.
+            transaction.networkProtocol = "h2"
         }
         return transaction
     }

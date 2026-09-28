@@ -95,6 +95,19 @@ import Testing
         #expect(PeerAddress(peer: peer) == nil)
     }
 
+    @Test func nonIPPeerIsShownAsItIs() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+
+        _ = try await withEchoClient(interceptors: [interceptor]) { client in
+            try await client.get(.with { $0.text = "hello" })
+        }
+
+        let transaction = try #require(try transactionSnapshots(in: store).first)
+        #expect(transaction.remoteAddress?.hasPrefix("in-process:") == true)
+        #expect(transaction.networkProtocol == nil)
+    }
+
     /// Review focus 3: the in-process transport hid HTTP/2 pseudo-headers before.
     @Test func http2TransportRecordsPeerWithoutPseudoHeaders() async throws {
         let store = try makeStore()

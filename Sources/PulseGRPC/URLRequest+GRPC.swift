@@ -18,7 +18,13 @@ extension URL {
     /// Builds `{grpc|grpcs}://{authority}{basePath}/{package.Service}/{Method}`.
     ///
     /// The scheme is `grpcs` when `baseURL` uses `https` or `grpcs`, `grpc` otherwise.
-    /// Without a `baseURL`, the authority is derived from `remotePeer` and the scheme is `grpc`.
+    /// Without a `baseURL`, the scheme is `grpc` and the authority is a best-effort reading of
+    /// `remotePeer`, whose format isn't stable (see ``PeerAddress``):
+    ///
+    /// - `ipv4:127.0.0.1:31415` → `127.0.0.1:31415`
+    /// - `ipv6:[::1]:443` → `[::1]:443`
+    /// - otherwise the text before the first `:`, e.g. `in-process` or `unix`
+    /// - `unknown` if that doesn't make a valid URL
     init(baseURL: URL?, remotePeer: String, descriptor: MethodDescriptor) {
         let methodPath = "/\(descriptor.service.fullyQualifiedService)/\(descriptor.method)"
         if let baseURL, var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) {
@@ -33,27 +39,8 @@ extension URL {
                 return
             }
         }
-        let authority = Self.authority(fromRemotePeer: remotePeer)
+        let transport = remotePeer.prefix { $0 != ":" }
+        let authority = PeerAddress(peer: remotePeer)?.authority ?? (transport.isEmpty ? "unknown" : String(transport))
         self = URL(string: "grpc://\(authority)\(methodPath)") ?? URL(string: "grpc://unknown\(methodPath)")!
-    }
-
-    /// Extracts a URL authority from a `ClientContext.remotePeer` description.
-    ///
-    /// - `ipv4:127.0.0.1:31415` → `127.0.0.1:31415`
-    /// - `ipv6:[::1]:443` → `[::1]:443`
-    /// - `in-process:27182` → `in-process`
-    /// - `unix:/tmp/socket` → `unix`
-    private static func authority(fromRemotePeer remotePeer: String) -> String {
-        guard let separator = remotePeer.firstIndex(of: ":") else {
-            return remotePeer.isEmpty ? "unknown" : remotePeer
-        }
-        let transport = remotePeer[..<separator]
-        let address = remotePeer[remotePeer.index(after: separator)...]
-        switch transport {
-        case "ipv4", "ipv6":
-            return address.isEmpty ? "unknown" : String(address)
-        default:
-            return transport.isEmpty ? "unknown" : String(transport)
-        }
     }
 }

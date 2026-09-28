@@ -1,7 +1,20 @@
-/// The IP address and port in a `ClientContext` peer description.
+/// The IP address and port in a `ClientContext.remotePeer` or `localPeer` description.
+///
+/// - Important: This relies on a format that isn't stable. grpc-swift describes
+///   `<transport>:<address>` as "a guideline for how implementations should format
+///   descriptions; different implementations may not follow this format, so don't make
+///   assumptions based on it." Only the documented `ipv4:` and `ipv6:` forms are recognized,
+///   and anything else is `nil`. Every caller must fall back gracefully: show the raw
+///   description or leave the field empty, but never drop, fail or delay the logged task
+///   because a description couldn't be parsed.
 struct PeerAddress: Equatable {
     var host: String
     var port: Int
+
+    /// `host:port`, with an IPv6 host in brackets, for use as a URL authority.
+    var authority: String {
+        host.contains(":") ? "[\(host)]:\(port)" : "\(host):\(port)"
+    }
 
     /// - `ipv4:127.0.0.1:31415` → (`127.0.0.1`, `31415`)
     /// - `ipv6:[::1]:443` → (`::1`, `443`)
