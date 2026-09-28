@@ -122,10 +122,12 @@ import Testing
         (Duration.milliseconds(160), "160ms"),
         (.microseconds(299_985), "300ms"),
         (.milliseconds(2_500), "2.5s"),
+        (.milliseconds(1_234), "1.2s"),
         (.microseconds(9_999_980), "10s"),
+        (.milliseconds(20), "20ms"),
     ])
     func formatsDurations(duration: Duration, expected: String) {
-        #expect(duration.statusMessageDescription == expected)
+        #expect(duration.formatted(.statusMessage) == expected)
     }
 
     @Test func cancellationMapsToCancelled() {

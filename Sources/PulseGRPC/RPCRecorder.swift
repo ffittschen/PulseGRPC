@@ -205,7 +205,7 @@ final class RPCRecorder: Sendable {
             return RPCError(code: .cancelled, message: "The RPC was cancelled.")
         }
         let elapsed = ContinuousClock.now - startInstant
-        let details = "grpc-timeout \(timeout.statusMessageDescription), \(elapsed.statusMessageDescription) elapsed"
+        let details = "grpc-timeout \(timeout.formatted(.statusMessage)), \(elapsed.formatted(.statusMessage)) elapsed"
         if elapsed + .milliseconds(20) >= timeout {
             return RPCError(code: .deadlineExceeded, message: "RPC timed out before completing (\(details)).")
         }

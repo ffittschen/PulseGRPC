@@ -1,3 +1,5 @@
+import Foundation
+
 extension Duration {
     /// Parses a `grpc-timeout` value such as `50m` (50 ms) or `2S` (2 seconds).
     ///
@@ -26,12 +28,14 @@ extension Duration {
         default: return nil
         }
     }
+}
 
-    /// Formats the duration for status messages, e.g. `160ms` or `2.5s`.
-    var statusMessageDescription: String {
-        let milliseconds = Int((self / .milliseconds(1)).rounded())
-        guard milliseconds >= 1000 else { return "\(milliseconds)ms" }
-        let tenths = (milliseconds + 50) / 100
-        return tenths % 10 == 0 ? "\(tenths / 10)s" : "\(tenths / 10).\(tenths % 10)s"
+extension FormatStyle where Self == Duration.UnitsFormatStyle {
+    /// Durations in status messages, e.g. `160ms` or `2.5s`: a single unit, seconds or
+    /// milliseconds, with at most one fractional digit. The locale is fixed because the
+    /// messages are English.
+    static var statusMessage: Self {
+        .units(allowed: [.seconds, .milliseconds], width: .narrow, maximumUnitCount: 1, fractionalPart: .init(lengthLimits: 0...1))
+            .locale(Locale(identifier: "en_US_POSIX"))
     }
 }
