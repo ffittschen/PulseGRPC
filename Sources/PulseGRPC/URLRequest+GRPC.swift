@@ -7,7 +7,7 @@ extension URLRequest {
     init(baseURL: URL?, context: ClientContext, metadata: Metadata) {
         self.init(url: URL(baseURL: baseURL, remotePeer: context.remotePeer, descriptor: context.descriptor))
         httpMethod = "POST"
-        var headers = [String: String](metadata)
+        var headers = Dictionary(headersFrom: metadata)
         headers["content-type"] = nil
         // The stored bodies are JSON. Pulse looks up `Content-Type` case-sensitively.
         headers["Content-Type"] = "application/json"

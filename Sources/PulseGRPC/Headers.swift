@@ -7,7 +7,7 @@ extension [String: String] {
     ///
     /// Keys are lowercased, as the HTTP/2 transport sends them, so `X-Id` and `x-id`
     /// become one header.
-    init(_ metadata: Metadata) {
+    init(headersFrom metadata: Metadata) {
         self.init(
             metadata.lazy
                 .filter { !$0.key.hasPrefix(":") }

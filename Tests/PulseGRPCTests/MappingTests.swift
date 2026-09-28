@@ -39,7 +39,7 @@ import Testing
         metadata.addString("2", forKey: "x-id")
         metadata.addBinary([0x01, 0x02], forKey: "x-token-bin")
 
-        let headers = [String: String](metadata)
+        let headers = Dictionary(headersFrom: metadata)
 
         #expect(headers["x-id"] == "1, 2")
         #expect(headers["x-token-bin"] == "AQI=")
@@ -48,13 +48,13 @@ import Testing
     /// The HTTP/2 transport passes pseudo-headers such as `:status` through as metadata.
     @Test func headersDropHTTP2PseudoHeaders() {
         let metadata: Metadata = [":status": "200", "x-id": "1"]
-        #expect([String: String](metadata) == ["x-id": "1"])
+        #expect(Dictionary(headersFrom: metadata) == ["x-id": "1"])
     }
 
     @Test func headersLowercaseKeys() {
         var metadata: Metadata = ["X-Id": "1"]
         metadata.addString("2", forKey: "x-id")
-        #expect([String: String](metadata) == ["x-id": "1, 2"])
+        #expect(Dictionary(headersFrom: metadata) == ["x-id": "1, 2"])
     }
 
     @Test func responseMergesInitialAndTrailingMetadata() throws {
