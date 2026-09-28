@@ -324,7 +324,7 @@ import Testing
         let gate = Gate()
 
         try await withEchoClient(service: EchoService(gate: gate), interceptors: [interceptor]) { client in
-            // Connect first: grpc-swift computes `grpc-timeout` before it waits for the
+            // Connect first: grpc-swift-2 computes `grpc-timeout` before it waits for the
             // connection, while the interceptor's clock only starts once the stream exists.
             _ = try await client.collect { try await $0.write(.with { $0.text = "warm-up" }) }
             var options = CallOptions.defaults

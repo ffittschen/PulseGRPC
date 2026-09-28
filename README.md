@@ -1,6 +1,6 @@
 # PulseGRPC
 
-Log [grpc-swift](https://github.com/grpc/grpc-swift-2) v2 client calls to [Pulse](https://github.com/kean/Pulse), next to your URLSession traffic.
+Log [grpc-swift-2](https://github.com/grpc/grpc-swift-2) client calls to [Pulse](https://github.com/kean/Pulse), next to your URLSession traffic.
 
 <p align="center">
   <img src="docs/images/console.png" width="260" alt="Pulse console with gRPC and REST entries">
@@ -62,7 +62,7 @@ let client = GRPCClient(
 )
 ```
 
-- grpc-swift runs interceptors in array order, and the last one is closest to the transport. There, the Pulse interceptor sees the final metadata (e.g. an `authorization` header added by an earlier interceptor) and the raw `RPCError` before other interceptors rewrite it.
+- grpc-swift-2 runs interceptors in array order, and the last one is closest to the transport. There, the Pulse interceptor sees the final metadata (e.g. an `authorization` header added by an earlier interceptor) and the raw `RPCError` before other interceptors rewrite it.
 - It runs once per attempt, so retries and hedged attempts show up as separate tasks.
 
 Show the console with PulseUI:
@@ -128,13 +128,13 @@ NetworkLogger.shared = NetworkLogger {
 - **Connection failures aren't logged.** DNS, TLS and connection-refused errors happen before interceptors run.
 - **The HTTP status is always 200**, because the interceptor never sees HTTP.
 - **Headers added by the transport aren't visible**, e.g. `:authority`, `user-agent`, `content-type` and `te`.
-- **Deadlines are inferred** from `grpc-timeout` and cancellation, with a 20 ms tolerance. grpc-swift computes `grpc-timeout` before it connects, so when connecting takes longer than that, a deadline on a new connection can show as `CANCELLED`. The message says how much time was allowed and how much had passed.
+- **Deadlines are inferred** from `grpc-timeout` and cancellation, with a 20 ms tolerance. grpc-swift-2 computes `grpc-timeout` before it connects, so when connecting takes longer than that, a deadline on a new connection can show as `CANCELLED`. The message says how much time was allowed and how much had passed.
 - **Default-valued fields are missing from bodies**, because proto3 JSON omits them.
 - **A one-message server stream looks like a unary call:** a single object, not an array.
 - **Sizes are JSON sizes**, not wire sizes, and header sizes are estimates. Compression isn't visible.
 - **Long streams stay pending until they end**, and their messages are buffered in memory until then.
 - **Failed calls show a short status** in the console list, and the full description in the inspector.
-- **Peer addresses are best effort.** grpc-swift doesn't promise a format for its peer descriptions. `ipv4:` and `ipv6:` peers are split into address and port, and the protocol is shown as `h2`, which is inferred rather than reported. Any other description, e.g. `in-process:1`, is shown as it is.
+- **Peer addresses are best effort.** grpc-swift-2 doesn't promise a format for its peer descriptions. `ipv4:` and `ipv6:` peers are split into address and port, and the protocol is shown as `h2`, which is inferred rather than reported. Any other description, e.g. `in-process:1`, is shown as it is.
 
 ## Development
 

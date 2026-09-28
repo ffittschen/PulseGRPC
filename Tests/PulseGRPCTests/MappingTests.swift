@@ -105,7 +105,7 @@ import Testing
         ("7u", .microseconds(7)),
         ("9n", .nanoseconds(9)),
         ("0n", .zero),
-        // 8 digits: grpc-swift sends a 30 s timeout like this.
+        // 8 digits: grpc-swift-2 sends a 30 s timeout like this.
         ("29999986u", .microseconds(29_999_986)),
         ("99999999H", .seconds(99_999_999 * 3600)),
     ])

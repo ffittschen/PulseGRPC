@@ -8,7 +8,7 @@ import Synchronization
 final class RPCRecorder: Sendable {
     enum Outcome: Sendable {
         /// The response stream ended. This is only a success if trailers arrived:
-        /// grpc-swift also ends the stream quietly when the calling task is cancelled.
+        /// grpc-swift-2 also ends the stream quietly when the calling task is cancelled.
         case endOfStream(isCancelled: Bool)
         /// The RPC ended with an error. The error's metadata are the trailers.
         case failed(RPCError, isCancelled: Bool)
@@ -196,7 +196,7 @@ final class RPCRecorder: Sendable {
 
     /// `DEADLINE_EXCEEDED` if the request's `grpc-timeout` has run out, `CANCELLED` otherwise.
     ///
-    /// grpc-swift computes `grpc-timeout` before it waits for a connection, while this clock
+    /// grpc-swift-2 computes `grpc-timeout` before it waits for a connection, while this clock
     /// starts once the stream exists. The 20 ms tolerance absorbs the usual gap; on a slow
     /// first connection a deadline can still read as `CANCELLED`, so the message says how
     /// much time was allowed and how much had passed.

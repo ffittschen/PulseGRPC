@@ -1,6 +1,6 @@
 /// The IP address and port in a `ClientContext.remotePeer` or `localPeer` description.
 ///
-/// - Important: This relies on a format that isn't stable. grpc-swift describes
+/// - Important: This relies on a format that isn't stable. grpc-swift-2 describes
 ///   `<transport>:<address>` as "a guideline for how implementations should format
 ///   descriptions; different implementations may not follow this format, so don't make
 ///   assumptions based on it." Only the documented `ipv4:` and `ipv6:` forms are recognized,
