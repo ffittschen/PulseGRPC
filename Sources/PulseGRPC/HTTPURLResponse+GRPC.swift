@@ -20,7 +20,8 @@ extension HTTPURLResponse {
         if let message = rpcError?.message, !message.isEmpty {
             headers["grpc-message"] = message
         }
-        headers["Content-Type"] = [String: String].jsonContentType
+        // The stored bodies are JSON. Pulse looks up `Content-Type` case-sensitively.
+        headers["Content-Type"] = "application/json"
         self.init(url: url, statusCode: 200, httpVersion: "HTTP/2", headerFields: headers)
     }
 }

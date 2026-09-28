@@ -9,7 +9,8 @@ extension URLRequest {
         httpMethod = "POST"
         var headers = [String: String](metadata)
         headers["content-type"] = nil
-        headers["Content-Type"] = [String: String].jsonContentType
+        // The stored bodies are JSON. Pulse looks up `Content-Type` case-sensitively.
+        headers["Content-Type"] = "application/json"
         allHTTPHeaderFields = headers
     }
 }

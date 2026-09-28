@@ -2,10 +2,6 @@ import Foundation
 import GRPCCore
 
 extension [String: String] {
-    /// Describes the stored bodies (JSON), not the bytes on the wire. Spelled
-    /// `Content-Type` because Pulse looks this header up case-sensitively.
-    static let jsonContentType = "application/json"
-
     /// Converts metadata to headers. Repeated keys are joined with `", "`,
     /// binary values are base64-encoded, and HTTP/2 pseudo-headers (`:status`) are dropped.
     ///
