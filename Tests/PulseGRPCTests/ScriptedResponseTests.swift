@@ -61,7 +61,34 @@ import Testing
         #expect(task.errorDebugDescription?.contains("CANCELLED (1): The RPC was cancelled.") == true)
     }
 
+    /// grpc-swift-2 skips the request producer when writing the request metadata throws,
+    /// e.g. because the server already closed the stream. The task is logged once
+    /// grpc-swift-2 lets go of the request.
+    @Test func rejectedCallWhoseProducerNeverRunsIsLogged() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+
+        let response = try await interceptor.intercept(
+            request: StreamingClientRequest<String> { try await $0.write("hi") },
+            context: context
+        ) { _, _ in
+            StreamingClientResponse<String>(error: RPCError(code: .unimplemented, message: "nope"))
+        }
+
+        #expect(throws: RPCError.self) { try response.accepted.get() }
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.state == .failure)
+        #expect(task.errorCode == 12)
+        #expect(task.requestBody == nil)
+    }
+
     // MARK: Private
+
+    private let context = ClientContext(
+        descriptor: MethodDescriptor(service: ServiceDescriptor(fullyQualifiedService: "echo.Echo"), method: "Get"),
+        remotePeer: "in-process:1",
+        localPeer: "in-process:1"
+    )
 
     /// Calls the interceptor as if the transport accepted the call and returned `parts`,
     /// runs the request producer, and returns the body parts the app would read.
@@ -72,11 +99,7 @@ import Testing
         let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
         let response = try await interceptor.intercept(
             request: StreamingClientRequest<String> { try await $0.write("hi") },
-            context: ClientContext(
-                descriptor: MethodDescriptor(service: ServiceDescriptor(fullyQualifiedService: "echo.Echo"), method: "Get"),
-                remotePeer: "in-process:1",
-                localPeer: "in-process:1"
-            )
+            context: context
         ) { request, _ in
             try await request.producer(RPCWriter(wrapping: DiscardingWriter()))
             return StreamingClientResponse(metadata: [:], bodyParts: RPCAsyncSequence(wrapping: parts))
