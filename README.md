@@ -34,7 +34,7 @@ PulseGRPC needs two `NetworkLogger` methods that aren't in a Pulse release yet. 
 dependencies: [
     .package(url: "https://github.com/ffittschen/PulseGRPC.git", branch: "main"),
     // Take Pulse from the same fork branch as PulseGRPC. SwiftPM treats kean/Pulse and the
-    // fork as one package, so a version requirement on kean/Pulse next to it won't resolve.
+    // fork as one package, so a version requirement on kean/Pulse next to it fails to build.
     .package(url: "https://github.com/ffittschen/Pulse.git", branch: "integration/pulse-grpc"),
 ],
 targets: [
