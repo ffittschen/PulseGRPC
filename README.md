@@ -19,7 +19,7 @@ The tasks work with everything in Pulse: the console, search, filters, redaction
 
 ## Status
 
-PulseGRPC needs two `NetworkLogger` methods that aren't in a Pulse release yet. They are proposed upstream, together with a few fixes this package relies on. Until a release includes them, take Pulse from the fork branch shown in [Installation](#installation).
+PulseGRPC needs two `NetworkLogger` methods that aren't in a Pulse release yet. They are proposed upstream in [kean/Pulse#378](https://github.com/kean/Pulse/issues/378), together with a few fixes this package relies on. Until a release includes them, take Pulse from the fork branch shown in [Installation](#installation).
 
 ## Requirements
 
