@@ -9,7 +9,7 @@ final class RPCRecorder: Sendable {
     enum Outcome: Sendable {
         /// The response stream ended. This is only a success if trailers arrived:
         /// grpc-swift-2 also ends the stream quietly when the calling task is cancelled.
-        case endOfStream(isCancelled: Bool)
+        case endOfStream
         /// The RPC ended with an error. The error's metadata are the trailers.
         case failed(RPCError, isCancelled: Bool)
         /// `next` threw before a response existed.
@@ -170,11 +170,13 @@ final class RPCRecorder: Sendable {
 
     private func result(for outcome: Outcome, trailingMetadata: Metadata?) -> Completion.Result {
         switch outcome {
-        case .endOfStream(let isCancelled):
-            let isComplete = trailingMetadata != nil && !isCancelled
-            return .rpc(isComplete ? nil : cancellationError(), withResponse: true)
+        case .endOfStream:
+            // Trailers mean the server completed the call, even if the task was cancelled after.
+            return .rpc(trailingMetadata == nil ? cancellationError() : nil, withResponse: true)
         case .failed(let error, let isCancelled):
-            return .rpc(isCancelled ? cancellationError() : error, withResponse: true)
+            // Only a cancellation is replaced, so it can read as a deadline. A status from the
+            // server is what the app sees, and is kept.
+            return .rpc(isCancelled && error.isCancellation ? cancellationError() : error, withResponse: true)
         case .threw(let error, let isCancelled):
             if isCancelled {
                 return .rpc(cancellationError(), withResponse: false)

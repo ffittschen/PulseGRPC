@@ -14,6 +14,12 @@ extension RPCError {
             self.init(code: .unknown, message: String(describing: error))
         }
     }
+
+    /// Whether the error reports a cancellation rather than a status from the server:
+    /// `CANCELLED`, or a `CancellationError` that grpc-swift-2 wrapped as `UNKNOWN`.
+    var isCancellation: Bool {
+        code == .cancelled || cause is CancellationError
+    }
 }
 
 extension RPCError.Code {

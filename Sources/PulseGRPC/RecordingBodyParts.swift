@@ -20,7 +20,7 @@ struct RecordingBodyParts<Output: Sendable>: AsyncSequence, Sendable {
         mutating func next() async throws -> Element? {
             do {
                 guard let part = try await base.next() else {
-                    recorder.finish(.endOfStream(isCancelled: Task.isCancelled))
+                    recorder.finish(.endOfStream)
                     return nil
                 }
                 switch part {
