@@ -86,7 +86,7 @@ To see only gRPC calls, filter by "URL begins with grpc", or by the `grpc` label
 
 | Parameter | Default | Description |
 |---|---|---|
-| `baseURL` | `nil` | The server URL, used for the logged URL. `https` and `grpcs` become `grpcs://`; anything else becomes `grpc://`. The path is kept; the query and fragment are dropped. `nil` uses the remote peer's address with `grpc://`, on a best-effort basis (see Known limitations). |
+| `baseURL` | `nil` | The server URL, used for the logged URL. `https` and `grpcs` become `grpcs://`; anything else becomes `grpc://`. The path is kept; the user, password, query and fragment are dropped. `nil` uses the remote peer's address with `grpc://`, on a best-effort basis (see Known limitations). |
 | `logger` | `nil` | The `NetworkLogger`. `nil` uses `NetworkLogger.shared`, looked up on every call. |
 | `label` | `"grpc"` | The task label. `nil` uses the logger's configured label. |
 | `jsonEncodingOptions` | `.init()` | SwiftProtobuf's `JSONEncodingOptions` for the bodies. |
