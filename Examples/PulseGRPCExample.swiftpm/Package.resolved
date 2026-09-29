@@ -1,5 +1,5 @@
 {
-  "originHash" : "e21279e16cab0cebd75f5503dcc26211a8b65b4c39c4a9042a423bb9b65575e6",
+  "originHash" : "b3bc284ae84dbc2608213db2a5f2746d858b8c322ffa186c295df699a6bb1275",
   "pins" : [
     {
       "identity" : "grpc-swift-2",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "176c5a434fd76f6f479848d1a8f7d44967534168",
         "version" : "2.4.1"
+      }
+    },
+    {
+      "identity" : "pulse",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ffittschen/Pulse.git",
+      "state" : {
+        "branch" : "integration/pulse-grpc",
+        "revision" : "2ac1baf8b51e0315128d16d43ed8e79fa9daa724"
       }
     },
     {

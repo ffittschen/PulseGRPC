@@ -14,7 +14,8 @@ let package = Package(
         .library(name: "PulseGRPC", targets: ["PulseGRPC"]),
     ],
     dependencies: [
-        .package(path: "../_forks/Pulse"),
+        // Until a Pulse release includes NetworkLogger.logTaskCreated/logTaskCompleted(taskId:…):
+        .package(url: "https://github.com/ffittschen/Pulse.git", branch: "integration/pulse-grpc"),
         .package(url: "https://github.com/grpc/grpc-swift-2.git", from: "2.4.2"),
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.38.1"),
         .package(url: "https://github.com/grpc/grpc-swift-protobuf.git", from: "2.4.1"),
