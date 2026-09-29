@@ -28,6 +28,8 @@ import Testing
         ("grpcs://example.com", "grpcs://example.com/echo.Echo/Get"),
         ("http://localhost:9000", "grpc://localhost:9000/echo.Echo/Get"),
         ("https://example.com/api?x=1", "grpcs://example.com/api/echo.Echo/Get"),
+        ("https://svc:token@example.com", "grpcs://example.com/echo.Echo/Get"),
+        ("https://svc@example.com:8443", "grpcs://example.com:8443/echo.Echo/Get"),
     ])
     func urlFromBaseURL(baseURL: String, expected: String) throws {
         let url = URL(baseURL: URL(string: baseURL), remotePeer: "ipv4:10.0.0.1:443", descriptor: descriptor)

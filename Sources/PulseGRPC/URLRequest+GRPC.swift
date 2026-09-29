@@ -18,7 +18,8 @@ extension URLRequest {
 extension URL {
     /// Builds `{grpc|grpcs}://{authority}{basePath}/{package.Service}/{Method}`.
     ///
-    /// The scheme is `grpcs` when `baseURL` uses `https` or `grpcs`, `grpc` otherwise.
+    /// The scheme is `grpcs` when `baseURL` uses `https` or `grpcs`, `grpc` otherwise. The
+    /// user, password, query and fragment of `baseURL` are dropped.
     /// Without a `baseURL`, the scheme is `grpc` and the authority is a best-effort reading of
     /// `remotePeer`, whose format isn't stable (see ``PeerAddress``):
     ///
@@ -33,6 +34,9 @@ extension URL {
             components.scheme = isSecure ? "grpcs" : "grpc"
             let basePath = components.path.hasSuffix("/") ? String(components.path.dropLast()) : components.path
             components.path = basePath + methodPath
+            // Credentials in the base URL would end up in every logged, shared and exported URL.
+            components.user = nil
+            components.password = nil
             components.query = nil
             components.fragment = nil
             if let url = components.url {
