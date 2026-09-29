@@ -90,6 +90,7 @@ To see only gRPC calls, filter by "URL begins with grpc", or by the `grpc` label
 | `logger` | `nil` | The `NetworkLogger`. `nil` uses `NetworkLogger.shared`, looked up on every call. |
 | `label` | `"grpc"` | The task label. `nil` uses the logger's configured label. |
 | `jsonEncodingOptions` | `.init()` | SwiftProtobuf's `JSONEncodingOptions` for the bodies. |
+| `bodySizeLimit` | 8 MiB | The size at which a request or response body is dropped instead of kept in memory. The default matches the store's `responseBodySizeLimit`, which drops such bodies anyway; if you change one, change both. The transaction's sizes still count dropped messages. |
 
 ## What gets logged
 
@@ -134,7 +135,7 @@ NetworkLogger.shared = NetworkLogger {
 - **Default-valued fields are missing from bodies**, because proto3 JSON omits them.
 - **A one-message server stream looks like a unary call:** a single object, not an array.
 - **Sizes are JSON sizes**, not wire sizes, and header sizes are estimates. Compression isn't visible.
-- **Long streams stay pending until they end**, and their messages are buffered in memory until then.
+- **Long streams stay pending until they end**, and their messages are buffered in memory until then, up to `bodySizeLimit` per body. A body that reaches it is dropped, and the task's body size then reads as zero.
 - **Failed calls show a short status** in the console list, and the full description in the inspector.
 - **Peer addresses are best effort.** grpc-swift-2 doesn't promise a format for its peer descriptions. `ipv4:` and `ipv6:` peers are split into address and port, and the protocol is shown as `h2`, which is inferred rather than reported. Any other description, e.g. `in-process:1`, is shown as it is.
 

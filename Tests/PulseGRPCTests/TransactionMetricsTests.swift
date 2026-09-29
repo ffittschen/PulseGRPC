@@ -44,6 +44,24 @@ import Testing
         #expect(transaction.size.responseBodyBytesReceived == 40) // [{"text":"a"},{"text":"b"},{"text":"c"}]
     }
 
+    @Test func bodyOverTheSizeLimitIsDroppedButCounted() async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store), bodySizeLimit: 30)
+
+        _ = try await withEchoClient(interceptors: [interceptor]) { client in
+            try await client.expand(.with { $0.text = "a b c" }) { response in
+                for try await _ in response.messages {}
+            }
+        }
+
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.state == .success)
+        #expect(task.requestBody == #"{"text":"a b c"}"#)
+        #expect(task.responseBody == nil)
+        let transaction = try #require(try transactionSnapshots(in: store).first)
+        #expect(transaction.size.responseBodyBytesReceived == 40) // [{"text":"a"},{"text":"b"},{"text":"c"}]
+    }
+
     @Test func bidiTransactionOmitsRequestEndThatOverlapsTheResponse() async throws {
         let store = try makeStore()
         let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))

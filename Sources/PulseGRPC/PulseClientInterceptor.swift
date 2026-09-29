@@ -20,6 +20,7 @@ public struct PulseClientInterceptor: ClientInterceptor {
     private let logger: NetworkLogger?
     private let label: String?
     private let jsonEncodingOptions: JSONEncodingOptions
+    private let bodySizeLimit: Int
 
     /// Creates an interceptor that logs each RPC attempt to Pulse as a network task.
     ///
@@ -30,16 +31,22 @@ public struct PulseClientInterceptor: ClientInterceptor {
     ///   - logger: The network logger. If `nil`, uses `NetworkLogger.shared` at the time of each call.
     ///   - label: The label of the logged tasks. If `nil`, uses the logger's configured label.
     ///   - jsonEncodingOptions: Options for encoding protobuf messages as JSON.
+    ///   - bodySizeLimit: The size in bytes at which a request or response body is dropped,
+    ///     so a long stream doesn't keep its messages in memory until it ends. The default
+    ///     matches `LoggerStore.Configuration.responseBodySizeLimit`, which drops such bodies
+    ///     anyway; set both if you change it. The logged sizes still count dropped messages.
     public init(
         baseURL: URL? = nil,
         logger: NetworkLogger? = nil,
         label: String? = "grpc",
-        jsonEncodingOptions: JSONEncodingOptions = .init()
+        jsonEncodingOptions: JSONEncodingOptions = .init(),
+        bodySizeLimit: Int = 8 * 1_048_576
     ) {
         self.baseURL = baseURL
         self.logger = logger
         self.label = label
         self.jsonEncodingOptions = jsonEncodingOptions
+        self.bodySizeLimit = bodySizeLimit
     }
 
     /// Logs the RPC attempt: creates a pending task, records the request and response
@@ -60,7 +67,8 @@ public struct PulseClientInterceptor: ClientInterceptor {
             localPeer: context.localPeer,
             logger: logger ?? .shared,
             label: label,
-            jsonEncodingOptions: jsonEncodingOptions
+            jsonEncodingOptions: jsonEncodingOptions,
+            bodySizeLimit: bodySizeLimit
         )
         recorder.start()
 

@@ -16,13 +16,40 @@ extension String {
     }
 }
 
-extension Data {
-    /// No messages → `nil`, one message → the message, more → a JSON array.
-    init?(jsonMessages messages: [String]) {
+/// The messages of one side of a call as JSON, kept until the body reaches `sizeLimit`.
+///
+/// The store only keeps bodies smaller than its size limit, so a longer stream's messages
+/// are dropped as soon as the body gets there, rather than buffered until the call ends.
+struct JSONMessages: Sendable {
+    let sizeLimit: Int
+    private var messages: [String] = []
+    /// The number of messages, including dropped ones.
+    private(set) var count = 0
+    /// The size of the body, including dropped messages.
+    private(set) var size = 0
+
+    init(sizeLimit: Int) {
+        self.sizeLimit = sizeLimit
+    }
+
+    /// No messages or too large → `nil`, one message → the message, more → a JSON array.
+    var data: Data? {
+        guard size < sizeLimit else { return nil }
         switch messages.count {
         case 0: return nil
-        case 1: self.init(messages[0].utf8)
-        default: self.init("[\(messages.joined(separator: ","))]".utf8)
+        case 1: return Data(messages[0].utf8)
+        default: return Data("[\(messages.joined(separator: ","))]".utf8)
+        }
+    }
+
+    mutating func append(_ json: String) {
+        count += 1
+        // A second message turns the body into an array: `[`, `]` and a `,` before each later message.
+        size += json.utf8.count + (count == 1 ? 0 : count == 2 ? 3 : 1)
+        if size < sizeLimit {
+            messages.append(json)
+        } else {
+            messages.removeAll()
         }
     }
 }

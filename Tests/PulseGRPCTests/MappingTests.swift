@@ -87,9 +87,35 @@ import Testing
     }
 
     @Test func bodyShapeDependsOnMessageCount() {
-        #expect(Data(jsonMessages: []) == nil)
-        #expect(Data(jsonMessages: [#"{"a":1}"#]) == Data(#"{"a":1}"#.utf8))
-        #expect(Data(jsonMessages: ["1", "2"]) == Data("[1,2]".utf8))
+        var messages = JSONMessages(sizeLimit: 100)
+        #expect(messages.data == nil)
+        messages.append(#"{"a":1}"#)
+        #expect(messages.data == Data(#"{"a":1}"#.utf8))
+        messages.append("2")
+        messages.append("3")
+        #expect(messages.data == Data(#"[{"a":1},2,3]"#.utf8))
+        #expect(messages.size == messages.data?.count)
+    }
+
+    /// The store only keeps bodies smaller than its limit.
+    @Test func messagesAreDroppedOnceTheBodyReachesTheSizeLimit() {
+        var messages = JSONMessages(sizeLimit: 6)
+        messages.append("1234")
+        #expect(messages.data == Data("1234".utf8))
+        messages.append("5") // [1234,5] is 8 bytes.
+        #expect(messages.data == nil)
+        messages.append("6")
+        #expect(messages.data == nil)
+        #expect(messages.size == 10) // [1234,5,6]
+        #expect(messages.count == 3)
+    }
+
+    @Test(arguments: [("123", true), ("1234", false)])
+    func bodyOfExactlyTheSizeLimitIsDropped(json: String, isKept: Bool) {
+        var messages = JSONMessages(sizeLimit: 4)
+        messages.append(json)
+        #expect((messages.data != nil) == isKept)
+        #expect(messages.size == json.utf8.count)
     }
 
     @Test func errorUsesCanonicalStatusName() {
