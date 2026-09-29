@@ -1,5 +1,6 @@
 import Foundation
 import GRPCCore
+import GRPCProtobuf
 import Pulse
 import PulseGRPC
 import Testing
@@ -344,6 +345,28 @@ import Testing
         #expect(task.errorDebugDescription?.contains("(grpc-timeout 300ms, ") == true)
     }
 
+    // MARK: Malformed responses
+
+    @Test(arguments: [
+        (0, "UNIMPLEMENTED (12): No messages received, exactly one was expected."),
+        (2, "UNIMPLEMENTED (12): Multiple messages received, but only one is expected."),
+    ])
+    func unaryCallWithoutExactlyOneReplyIsLoggedAsUnimplemented(replyCount: Int, description: String) async throws {
+        let store = try makeStore()
+        let interceptor = PulseClientInterceptor(baseURL: exampleBaseURL, logger: NetworkLogger(store: store))
+
+        try await withEchoClient(services: [StreamingGetService(replyCount: replyCount)], interceptors: [interceptor]) { client in
+            await #expect(throws: RPCError.self) {
+                try await client.get(.with { $0.text = "hi" })
+            }
+        }
+
+        try await eventually { try snapshots(in: store).first?.state == .failure }
+        let task = try #require(try snapshots(in: store).first)
+        #expect(task.errorCode == 12)
+        #expect(task.errorDebugDescription?.contains(description) == true)
+    }
+
     // MARK: Logger configuration
 
     @Test func sensitiveHeadersAreRedacted() async throws {
@@ -370,5 +393,26 @@ import Testing
 
         let task = try #require(try snapshots(in: store).first)
         #expect(task.label == "custom")
+    }
+}
+
+/// Answers the unary `Get` like a server stream with `replyCount` replies, as a server
+/// that disagrees with the client about the method's type would.
+private struct StreamingGetService: RegistrableRPCService {
+    let replyCount: Int
+
+    func registerMethods<Transport: ServerTransport>(with router: inout RPCRouter<Transport>) {
+        router.registerHandler(
+            forMethod: Echo_Echo.Method.Get.descriptor,
+            deserializer: ProtobufDeserializer<Echo_EchoRequest>(),
+            serializer: ProtobufSerializer<Echo_EchoResponse>()
+        ) { [replyCount] _, _ in
+            StreamingServerResponse { writer in
+                for index in 0..<replyCount {
+                    try await writer.write(.with { $0.text = "reply-\(index)" })
+                }
+                return [:]
+            }
+        }
     }
 }

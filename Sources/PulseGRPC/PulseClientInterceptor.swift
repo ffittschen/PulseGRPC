@@ -55,6 +55,7 @@ public struct PulseClientInterceptor: ClientInterceptor {
         let recorder = RPCRecorder(
             request: URLRequest(baseURL: baseURL, context: context, metadata: request.metadata),
             requestMetadata: request.metadata,
+            descriptor: context.descriptor,
             remotePeer: context.remotePeer,
             localPeer: context.localPeer,
             logger: logger ?? .shared,
