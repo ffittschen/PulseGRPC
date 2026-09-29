@@ -45,6 +45,8 @@ targets: [
 ]
 ```
 
+If you build with Xcode 27 and run on iOS 26 or macOS 26, pin swift-collections to 1.3.0 in your app's `Package.resolved`. grpc-swift-2 depends on it, and swift-collections 1.7 references `_swift_initBorrow`, which those OS versions don't have, so the app fails to launch. This affects any app using grpc-swift-2, with or without PulseGRPC.
+
 ## Usage
 
 Add the interceptor **last**:
@@ -143,7 +145,7 @@ swift test
 Scripts/generate-test-protos.sh   # regenerates the Echo fixtures; needs protoc
 ```
 
-`Package.resolved` pins swift-collections to 1.3.0. Built with Xcode 27, swift-collections 1.7 references `_swift_initBorrow`, which macOS 26 and iOS 26 don't have, so test bundles and apps fail to load there. The example app's `Package.resolved` has the same pin.
+`Package.resolved` pins swift-collections to 1.3.0. Built with Xcode 27, swift-collections 1.7 references `_swift_initBorrow`, which macOS 26 and iOS 26 don't have, so test bundles and apps fail to load there. The example app's `Package.resolved` has the same pin. SwiftPM ignores the `Package.resolved` of dependencies, so the pin doesn't reach apps, see [Installation](#installation).
 
 ## License
 
