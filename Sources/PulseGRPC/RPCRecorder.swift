@@ -321,6 +321,7 @@ final class RPCRecorder: Sendable {
     /// The uncompressed size of `name: value` lines, a stand-in for header bytes on the wire
     /// (HTTP/2 compresses them with HPACK).
     private func estimatedSize(ofHeaders headers: [String: String]?) -> Int64 {
-        Int64((headers ?? [:]).reduce(0) { $0 + $1.key.utf8.count + 2 + $1.value.utf8.count + 2 })
+        let size: Int = (headers ?? [:]).reduce(0) { $0 + $1.key.utf8.count + 2 + $1.value.utf8.count + 2 }
+        return Int64(size)
     }
 }
